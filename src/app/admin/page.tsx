@@ -34,6 +34,7 @@ export default async function AdminDashboard() {
         <Stat label="Teams" value={n("teams")} />
         <Stat label="Event players" value={n("players")} sub={`${n("library_players")} in library`} />
         <Stat label="Official transactions" value={n("transactions")} />
+        <Stat label="Participant trackers" value={n("trackers")} />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

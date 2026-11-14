@@ -39,6 +39,35 @@ Highlights:
 - **Live updates.** Supabase Realtime pushes official changes. Every client recomputes analytics from the authoritative transactions and resyncs after a reconnect.
 - **Private workspace.** Notes, shortlists (target / backup / avoid with priority), simulations (scenarios A/B/C), competitor observations (Participant-entered / Estimated / Unverified) and alert preferences. Only the owner can see them.
 
+## Trackers & crews (auctions run outside the app)
+
+Any signed-in user can create a **tracker** (`/trackers/new`) for an auction that is conducted somewhere else: in a college hall, or tracked in Excel today.
+
+- **Setup.** Name the tracker, give your team and the competitor teams, set the purse, and pick a rule template. Then add players by typing them in, quick-adding them during entry, or importing an Excel/CSV sheet.
+- **Crew.** Share the private **crew code** (Crew & roles page). Teammates join through **Join auction / crew** and land on your team as read-only **analysts**.
+- **Roles.**
+  - **Data entry** members record results and edit teams, players and rules. Results can be logged one at a time or imported in bulk from an Excel/CSV results sheet.
+  - **Analysts** get every dashboard, Smart Bid, competitor intelligence and alert live, but cannot change any data. This is enforced in the database.
+  - The owner assigns roles, resets the crew code and can delete the tracker.
+- **Realism over blocking.** A tracker records what really happened, so rule maxima and overspend show as warnings instead of rejecting the entry.
+- **Excel in and out.**
+  - In: players and results from `.xlsx` or `.csv`.
+  - Out: a full `.xlsx` workbook (Reports page) with tabs for insights, teams, rosters, players and the results log.
+- **Privacy.** Trackers are never publicly listed. Only crew members can see them, and only the owner can manage the crew.
+
+## Install on any device (PWA)
+
+AUCTION IQ is a Progressive Web App (manifest, icons, service worker, offline page). Use the **Install** button, or:
+
+| Platform | How to install |
+| --- | --- |
+| iPhone / iPad | Safari → Share → Add to Home Screen |
+| Android | Chrome → ⋮ → Install app |
+| Windows / Linux / ChromeOS | Chrome or Edge → install icon in the address bar |
+| macOS | Chrome/Edge install icon, or Safari 17+ → File → Add to Dock |
+
+The installed app opens in its own window and updates automatically. Live auction data is never cached; it always comes from Supabase in real time.
+
 ## Architecture
 
 ```
@@ -64,6 +93,7 @@ Next.js server
 | `…_functions.sql` | authorization helpers, triggers, and the atomic RPCs: `record_sale`, `mark_unsold`, `undo_last_transaction`, `void_transaction`, `correct_sale`, `set_session_status`, `set_current_player`, `publish_bid`, `publish_announcement`, `join_event`, `claim_team`, `assign_team`, `set_member_status`, `save_event_rules`, `import_library_players`, `admin_set_user`, `admin_platform_stats` |
 | `…_rls.sql` | Row Level Security on every table + Realtime publication |
 | `…_reference_data.sql` | categories, role permissions, platform defaults, two rule templates (no player data) |
+| `…_trackers_and_crews.sql` | tracker mode (`events.mode`, owner, own team), crew roles `data_entry` / `analyst`, `create_tracker`, `get_crew`, `set_crew_role`, `remove_crew_member`, `reset_crew_code`, `update_tracker`, `delete_tracker`, updated `can_manage_event` / `join_event` |
 
 ## Security model
 
@@ -107,7 +137,7 @@ cp .env.example .env.local   # fill in your Supabase URL + anon key (+ service r
 Apply the database. Pick one:
 
 - **Supabase CLI:** `supabase link --project-ref <ref>` then `supabase db push`.
-- **SQL editor:** run the four files in `supabase/migrations/` in order.
+- **SQL editor:** run the five files in `supabase/migrations/` in order.
 
 To load the optional demo event (fictional players labelled "DEMO", invite code `DEMO2026`), also run `supabase/seed.sql`.
 

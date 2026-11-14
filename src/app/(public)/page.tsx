@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Crosshair, FlaskConical, Gavel, Radio, ShieldCheck, Sparkles, Trophy, Wallet } from "lucide-react";
+import { ArrowRight, Crosshair, FileSpreadsheet, FlaskConical, Gavel, Radio, ShieldCheck, Smartphone, Sparkles, Trophy, Users, Wallet } from "lucide-react";
+import { InstallButton } from "@/components/shell/InstallButton";
 import { buttonVariants } from "@/components/ui/button";
 
 const features = [
@@ -9,6 +10,9 @@ const features = [
   { icon: Wallet, title: "Purse planner", body: "Reserves, discretionary budget and purse utilisation calculated automatically after every sale." },
   { icon: Trophy, title: "Live leaderboard", body: "Official ranking by the event's own formula, kept separate from analytical strength scores." },
   { icon: Gavel, title: "Auction control room", body: "Auctioneers record sales in seconds. Atomic transactions, undo and corrections with a full audit log." },
+  { icon: Users, title: "Trackers for any auction", body: "Auction run elsewhere? Create a private tracker, import your Excel sheet, and replace the spreadsheet with live analytics." },
+  { icon: Smartphone, title: "Crew mode on every device", body: "One teammate enters results; the rest of your crew watch insights update live on their phones and laptops. Install it like an app." },
+  { icon: FileSpreadsheet, title: "Excel in, Excel out", body: "Import players and results from .xlsx or CSV, and export a full analytics workbook any time." },
 ];
 
 export default function Landing() {
@@ -28,6 +32,7 @@ export default function Landing() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/register" className={buttonVariants({ size: "lg" })}>Create free account <ArrowRight size={16} /></Link>
           <Link href="/join" className={buttonVariants({ size: "lg", variant: "outline" })}>I have an invite code</Link>
+          <InstallButton />
         </div>
         <div className="mt-14 grid gap-3 sm:grid-cols-3">
           {[

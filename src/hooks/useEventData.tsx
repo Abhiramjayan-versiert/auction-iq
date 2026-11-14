@@ -32,6 +32,10 @@ export interface EventData {
   userId: string | null;
   myTeamId: string | null;
   canManage: boolean;
+  /** private tracker for an auction run outside the app */
+  isTracker: boolean;
+  /** tracker owner (manages crew) */
+  isOwner: boolean;
   lastUpdated: Date | null;
   reload: () => Promise<void>;
   teamName: (id: string | null | undefined) => string;
@@ -48,7 +52,7 @@ const EMPTY_RULES = toRuleSet(null, [], "Cr");
  */
 export function EventDataProvider({ eventId, perspectiveTeamId, children }: { eventId: string; perspectiveTeamId?: string | null; children: ReactNode }) {
   const sb = supabaseBrowser();
-  const [state, setState] = useState<Omit<EventData, "snapshot" | "analysis" | "reload" | "teamName" | "playerById" | "myTeamId"> & { ownTeamId: string | null }>({
+  const [state, setState] = useState<Omit<EventData, "snapshot" | "analysis" | "reload" | "teamName" | "playerById" | "myTeamId" | "isTracker" | "isOwner"> & { ownTeamId: string | null }>({
     loading: true,
     error: null,
     connected: false,
@@ -120,7 +124,7 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
     void load();
     const filter = `event_id=eq.${eventId}`;
     const ch = sb.channel(`event-${eventId}`);
-    for (const table of ["auction_transactions", "auction_sessions", "players", "teams", "team_members", "team_financials"]) {
+    for (const table of ["auction_transactions", "auction_sessions", "players", "teams", "team_members", "team_financials", "auction_rules", "rule_constraints", "event_members"]) {
       ch.on("postgres_changes", { event: "*", schema: "public", table, filter }, schedule);
     }
     ch.subscribe((status) => {
@@ -154,7 +158,9 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
     return { snapshot, analysis, teamName: (id: string | null | undefined) => (id ? names[id] ?? "—" : "—"), playerById };
   }, [state.rules, state.teams, state.players, state.transactions]);
 
-  const value: EventData = { ...state, ...derived, myTeamId, reload: load };
+  const isTracker = state.event?.mode === "tracker";
+  const isOwner = Boolean(isTracker && state.userId && state.event?.owner_id === state.userId);
+  const value: EventData = { ...state, ...derived, myTeamId, isTracker, isOwner, reload: load };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

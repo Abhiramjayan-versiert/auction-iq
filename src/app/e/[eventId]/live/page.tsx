@@ -19,7 +19,7 @@ type Mode = "official" | "A" | "B" | "C";
 
 export default function LiveWorkspace() {
   const { me: officialMe, prompt } = useMyTeam();
-  const { session, playerById, transactions, teamName, myTeamId, snapshot, rules } = useEventData();
+  const { session, playerById, transactions, teamName, myTeamId, snapshot, rules, isTracker } = useEventData();
   const { intel, sims, shortlist, notes, saveNote } = useWorkspace();
   const m = useMoney();
   const [mode, setMode] = useState<Mode>("official");
@@ -70,7 +70,7 @@ export default function LiveWorkspace() {
                 {session?.current_bid_team_id && session.bidding_open && <div className="mt-2 text-xs text-muted">Leading (announced): {teamName(session.current_bid_team_id)}</div>}
                 {shortlist.find((s) => s.player_id === p.id) && <Badge tone="accent" className="mt-2">On your {shortlist.find((s) => s.player_id === p.id)!.list} list</Badge>}
               </div>
-            ) : <p className="py-8 text-center text-sm text-muted">Waiting for the auctioneer to bring up the next player…</p>}
+            ) : <p className="py-8 text-center text-sm text-muted">{isTracker ? "Waiting for data entry to put the next player on the block…" : "Waiting for the auctioneer to bring up the next player…"}</p>}
           </CardBody>
         </Card>
 
@@ -160,7 +160,7 @@ export default function LiveWorkspace() {
           </CardBody>
         </Card>
       </div>
-      <p className="text-[11px] text-faint">Results are recorded by the auctioneer; AUCTION IQ does not detect physical bids. Currency: {rules.currency}.</p>
+      <p className="text-[11px] text-faint">Results are recorded by {isTracker ? "your crew's data-entry member" : "the auctioneer"}; AUCTION IQ does not detect physical bids. Currency: {rules.currency}.</p>
     </div>
   );
 }

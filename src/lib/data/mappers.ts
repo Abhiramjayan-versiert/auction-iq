@@ -59,6 +59,7 @@ export function toRuleSet(r: AuctionRulesRow | null, cs: RuleConstraintRow[], cu
     rating_scale_max: Number(r?.rating_scale_max ?? 10),
     currency,
     allow_overspend: r?.allow_overspend ?? false,
+    enforce_max_constraints: r?.enforce_max_constraints ?? true,
     constraints: [...cs]
       .sort((a, b) => a.sort - b.sort)
       .map((c) => ({ id: c.id, label: c.label, category: c.category, origin: c.origin, min: c.min_count, max: c.max_count })),

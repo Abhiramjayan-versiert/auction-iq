@@ -30,7 +30,27 @@ begin
     i := i + 1;
   end loop;
 end $$;
+-- a participant-style tracker with a crew (data entry = demo admin, analyst = demo participant)
+create temp table trk as select create_tracker('Outside Fest Tracker', 'Chennai', array['Mumbai', 'Bengaluru', 'Kolkata', 'Delhi'], 80, 'Cr',
+  (select id from rule_templates where name like '9-player%')) as id;
+insert into players (event_id, name, origin, category, base_price, lot_number)
+  select (select id from trk), 'Tracked Player ' || g, case when g % 3 = 0 then 'overseas' else 'indian' end, (array['BAT','BOWL','AR','WK'])[1 + g % 4], 1, g
+  from generate_series(1, 24) g;
+insert into player_ratings (player_id, overall, batting, bowling, fielding, source)
+  select id, 7 + (lot_number % 25) / 10.0, 7 + (lot_number % 20) / 10.0, 6.5 + (lot_number % 30) / 10.0, 7, 'entered by data entry'
+  from players where event_id = (select id from trk);
+do $$ declare p record; i int := 0; begin
+  for p in select id from players where event_id = (select id from trk) order by lot_number limit 10 loop
+    perform record_sale((select id from trk), p.id, (select id from teams where event_id = (select id from trk) order by name offset (i % 5) limit 1), 2 + (i % 4) * 1.5);
+    i := i + 1;
+  end loop;
+end $$;
 select set_current_player('e0000000-0000-0000-0000-000000000001', (select id from players where event_id = 'e0000000-0000-0000-0000-000000000001' and auction_status = 'upcoming' order by lot_number limit 1));
+reset role;
+select invite_code as trk_code from events where id = (select id from trk) \gset
+select set_config('request.jwt.claim.sub', '0000000a-0000-0000-0000-000000000002', false);
+set role authenticated;
+select join_event(:'trk_code');
 reset role;
 insert into private_notes (user_id, event_id, title, body) values ('0000000a-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'Plan', 'Secure an overseas bowler early.');
 insert into player_shortlists (user_id, event_id, player_id, list, priority)
@@ -70,5 +90,8 @@ select json_build_object(
   'player_shortlists', (select json_agg(s) from player_shortlists s),
   'simulated_transactions', (select json_agg(s) from simulated_transactions s),
   'competitor_observations', (select json_agg(o) from competitor_observations o),
+  'crew', (select json_agg(json_build_object('event_id', em.event_id, 'user_id', em.user_id, 'full_name', p.full_name, 'email', p.email, 'college', p.college,
+            'role', em.role, 'status', em.status, 'is_owner', e.owner_id = em.user_id, 'joined_at', em.joined_at))
+            from event_members em join profiles p on p.id = em.user_id join events e on e.id = em.event_id where e.mode = 'tracker'),
   'admin_platform_stats', (select admin_platform_stats())
 );

@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { TeamChip } from "@/components/domain/team";
 import { useEventData } from "@/hooks/useEventData";
 import { downloadCsv } from "@/lib/utils";
+import { analyticsWorkbook, downloadWorkbook } from "@/lib/data/excel";
 
 export default function EventReports() {
-  const { event, analysis, rules, players, session, teamName } = useEventData();
+  const { event, analysis, rules, players, session, teamName, transactions } = useEventData();
   const m = (n: number | null | undefined) => fmtMoney(n, rules.currency);
   const completed = session?.status === "completed";
   const winner = completed ? analysis.leaderboard.find((r) => r.officialRank === 1 && r.eligible) : null;
@@ -21,7 +22,7 @@ export default function EventReports() {
   const exportRosters = () => downloadCsv(`${event!.name}-rosters.csv`, analysis.teams.flatMap((t) => t.entries.map((e) => ({ team: t.team.name, player: e.player.name, origin: e.player.origin, category: e.player.category, rating: e.player.overall, price: e.price }))));
   return (
     <div className="space-y-4">
-      <PageHeader title="Event reports" description={`Official formula: ${FORMULA_LABEL[rules.ranking_formula]}`} actions={<><Button variant="outline" size="sm" onClick={exportStandings}><Download size={14} /> Standings CSV</Button><Button variant="outline" size="sm" onClick={exportRosters}><Download size={14} /> Rosters CSV</Button><Button size="sm" onClick={() => window.print()}><Printer size={14} /> Print / PDF</Button></>} />
+      <PageHeader title="Event reports" description={`Official formula: ${FORMULA_LABEL[rules.ranking_formula]}`} actions={<><Button variant="secondary" size="sm" onClick={() => downloadWorkbook(`${event!.name} - results.xlsx`, analyticsWorkbook(analysis, players, teamName, transactions))}><Download size={14} /> Excel workbook</Button><Button variant="outline" size="sm" onClick={exportStandings}><Download size={14} /> Standings CSV</Button><Button variant="outline" size="sm" onClick={exportRosters}><Download size={14} /> Rosters CSV</Button><Button size="sm" onClick={() => window.print()}><Printer size={14} /> Print / PDF</Button></>} />
       {winner ? (
         <Card className="flex items-center gap-3 border-accent/50 p-4"><Trophy className="text-accent" /><div><div className="text-xs text-faint">Official winner</div><TeamChip team={analysis.byId[winner.teamId].team} className="text-lg font-semibold" /> <span className="ml-2 tabular text-accent">{fmtRating(winner.officialValue)}</span></div></Card>
       ) : <p className="text-xs text-muted">{completed ? "Auction completed, but no team satisfies the winning conditions." : "Provisional — complete the auction in the control room to declare the official winner."}</p>}

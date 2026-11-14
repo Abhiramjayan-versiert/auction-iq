@@ -10,10 +10,12 @@ import { useMyTeam } from "@/components/participant/NeedTeam";
 import { useEventData } from "@/hooks/useEventData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { downloadCsv } from "@/lib/utils";
+import { analyticsWorkbook, downloadWorkbook } from "@/lib/data/excel";
+import { FileSpreadsheet } from "lucide-react";
 
 export default function Reports() {
   const { me, prompt } = useMyTeam();
-  const { event, teamName, rules } = useEventData();
+  const { event, teamName, rules, players, transactions } = useEventData();
   const { intel } = useWorkspace();
   const m = useMoney();
   const insights = useMemo(() => (me ? generateInsights(intel, me.team.id) : []), [intel, me]);
@@ -30,7 +32,7 @@ export default function Reports() {
     })));
   return (
     <div className="space-y-4 print:text-black">
-      <PageHeader title="Strategic report" description={`${event!.name} · generated ${new Date().toLocaleString("en-IN")}`} actions={<><Button variant="outline" size="sm" onClick={exportTeams}><Download size={14} /> Competitor CSV</Button><Button size="sm" onClick={() => window.print()}><Printer size={14} /> Print / PDF</Button></>} />
+      <PageHeader title="Strategic report" description={`${event!.name} · generated ${new Date().toLocaleString("en-IN")}`} actions={<><Button size="sm" variant="secondary" onClick={() => downloadWorkbook(`${event!.name} - AUCTION IQ.xlsx`, [{ name: "My insights", rows: insights.map((i) => ({ Priority: i.severity, Insight: i.title, Detected: i.detected, Action: i.action, Impact: i.impact, Confidence: i.confidence, Calculation: i.calculation })) }, ...analyticsWorkbook(intel, players, teamName, transactions)])}><FileSpreadsheet size={14} /> Excel workbook</Button><Button variant="outline" size="sm" onClick={exportTeams}><Download size={14} /> Competitor CSV</Button><Button size="sm" onClick={() => window.print()}><Printer size={14} /> Print / PDF</Button></>} />
       <Card>
         <CardHeader title={`${me.team.name} — position summary`} />
         <CardBody className="grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">

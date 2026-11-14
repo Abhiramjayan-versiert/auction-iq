@@ -60,6 +60,31 @@ const { chromium } = require("playwright");
   await page.waitForTimeout(200);
   check((await page.locator("tbody tr").count()) === 1, "Player search filters instantly");
 
+  // Tracker: data-entry view
+  const trk = require("./fixtures.json").events.find((e) => e.mode === "tracker").id;
+  await page.goto(`${BASE}/manage/${trk}/control-room`, { waitUntil: "networkidle" });
+  check((await page.locator("text=every result appears on your crew").count()) > 0, "Tracker control room shows data-entry mode");
+  await page.fill("input[placeholder^='Search player']", "Someone Brand New");
+  await page.waitForTimeout(200);
+  check((await page.locator("text=isn't in the list").count()) > 0, "Unknown player offers inline quick-add");
+  await page.goto(`${BASE}/e/${trk}`, { waitUntil: "networkidle" });
+  check((await page.locator("nav >> text=Record results").count()) > 0, "Data entry sees 'Record results' in the menu");
+
+  // Tracker: analyst (crew member) view — read-only
+  const sess2 = { ...session, access_token: `${b64({ alg: "HS256" })}.${b64({ sub: "0000000a-0000-0000-0000-000000000002", exp: 4102444800 })}.sig`, user: { ...session.user, id: "0000000a-0000-0000-0000-000000000002", email: "demo.player@example.com" } };
+  const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx2.addCookies([{ name: "sb-localhost-auth-token", value: "base64-" + Buffer.from(JSON.stringify(sess2)).toString("base64url"), domain: "localhost", path: "/" }]);
+  const ap = await ctx2.newPage();
+  ap.on("pageerror", (e) => errs.push("analyst: " + e.message));
+  await ap.goto(`${BASE}/e/${trk}`, { waitUntil: "networkidle" });
+  check((await ap.locator("text=Analyst").count()) > 0 || (await ap.locator("text=Remaining purse").count()) > 0, "Analyst sees the live dashboard on a phone-sized screen");
+  check((await ap.locator("text=Record results").count()) === 0, "Analyst has no data-entry menu");
+  await ap.goto(`${BASE}/manage/${trk}/control-room`, { waitUntil: "networkidle" });
+  check(new URL(ap.url()).pathname === "/dashboard", `Analyst is blocked from data entry (→ ${new URL(ap.url()).pathname})`);
+  await ap.goto(`${BASE}/e/${trk}/crew`, { waitUntil: "networkidle" });
+  check((await ap.locator("text=Demo Admin").count()) > 0 && (await ap.locator("select").count()) === 0, "Analyst sees crew but cannot change roles");
+  await ctx2.close();
+
   check(errs.length === 0, `No page errors${errs.length ? ": " + errs.join("; ") : ""}`);
   await browser.close();
   console.log(fails ? `${fails} failure(s)` : "All interaction checks passed");

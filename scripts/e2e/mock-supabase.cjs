@@ -7,9 +7,20 @@ const path = require("path");
 const PORT = Number(process.env.MOCK_PORT || 54399);
 const db = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures.json"), "utf8"));
 for (const k of Object.keys(db)) if (db[k] === null) db[k] = [];
-const USER_ID = process.env.MOCK_USER || "0000000a-0000-0000-0000-000000000001";
+// The signed-in user is taken from the bearer token's `sub` claim (falls back to MOCK_USER / demo admin).
+let USER_ID = process.env.MOCK_USER || "0000000a-0000-0000-0000-000000000001";
+const subFrom = (req) => {
+  try {
+    const tok = (req.headers.authorization || "").replace(/^Bearer /, "").split(".")[1];
+    return JSON.parse(Buffer.from(tok, "base64url").toString()).sub || null;
+  } catch {
+    return null;
+  }
+};
 const profile = () => db.profiles.find((p) => p.id === USER_ID);
 const user = () => ({ id: USER_ID, aud: "authenticated", role: "authenticated", email: profile()?.email, app_metadata: {}, user_metadata: {}, created_at: profile()?.created_at });
+const crewRole = (eventId) => (db.crew || []).find((c) => c.event_id === eventId && c.user_id === USER_ID)?.role;
+const isTracker = (eventId) => db.events.find((e) => e.id === eventId)?.mode === "tracker";
 
 function applyFilters(rows, params) {
   for (const [col, raw] of params) {
@@ -37,10 +48,11 @@ function applyFilters(rows, params) {
 }
 
 const RPC = {
-  can_manage_event: () => profile()?.platform_role !== "participant",
+  can_manage_event: (a) => (isTracker(a.p_event) ? crewRole(a.p_event) === "data_entry" : profile()?.platform_role !== "participant"),
   is_event_member: () => true,
-  can_edit_rules: () => profile()?.platform_role !== "participant",
+  can_edit_rules: (a) => (isTracker(a.p_event) ? crewRole(a.p_event) === "data_entry" : profile()?.platform_role !== "participant"),
   admin_platform_stats: () => db.admin_platform_stats,
+  get_crew: (a) => (db.crew || []).filter((c) => c.event_id === a.p_event),
   preview_event_by_code: (a) => db.events.filter((e) => e.invite_code === String(a.p_code).toUpperCase()).map((e) => ({ ...e, organization: e.organizations?.name, teams_count: db.teams.filter((t) => t.event_id === e.id).length, membership_status: null })),
 };
 
@@ -56,6 +68,9 @@ http.createServer((req, res) => {
   req.on("data", (c) => (body += c));
   req.on("end", () => {
     const json = body ? JSON.parse(body) : null;
+    const anonKey = "mock";
+    const sub = subFrom(req);
+    if (sub && sub !== anonKey) USER_ID = sub;
     if (url.pathname === "/auth/v1/user") return send(res, 200, user());
     if (url.pathname === "/auth/v1/logout") return send(res, 204);
     const rpc = url.pathname.match(/^\/rest\/v1\/rpc\/(\w+)/);

@@ -39,6 +39,9 @@ export interface EventRow {
   participant_permissions: { view_competitors?: boolean; view_official_purses?: boolean; view_leaderboard?: boolean };
   created_at: string;
   completed_at: string | null;
+  mode: "official" | "tracker";
+  owner_id: string | null;
+  tracker_team_id: string | null;
   organizations?: { name: string } | null;
 }
 
@@ -62,7 +65,7 @@ export interface TeamMemberRow {
 export interface EventMemberRow {
   event_id: string;
   user_id: string;
-  role: "auctioneer" | "participant";
+  role: "auctioneer" | "participant" | "data_entry" | "analyst";
   status: "pending" | "approved" | "rejected" | "removed";
   joined_at: string;
   profiles?: Pick<ProfileRow, "full_name" | "email" | "college"> | null;

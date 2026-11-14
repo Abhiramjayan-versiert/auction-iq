@@ -7,7 +7,8 @@ export default async function HubLayout({ children }: { children: React.ReactNod
     {
       items: [
         { href: "/dashboard", label: "My auctions", icon: "dashboard" },
-        { href: "/join", label: "Join auction", icon: "gavel" },
+        { href: "/join", label: "Join auction / crew", icon: "gavel" },
+        { href: "/trackers/new", label: "New tracker", icon: "calc" },
         { href: "/events", label: "Discover events", icon: "events" },
         { href: "/profile", label: "Profile", icon: "settings" },
       ],

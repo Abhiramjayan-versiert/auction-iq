@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Ban, CheckCircle2, Megaphone, Pause, Play, RotateCcw, Square, Undo2 } from "lucide-react";
+import { Ban, CheckCircle2, Megaphone, Pause, Play, RotateCcw, Square, Undo2, Upload } from "lucide-react";
 import { cellAllowed, cellOf, fmtMoney, fmtRating, round2 } from "@/lib/engine";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
@@ -12,11 +12,13 @@ import { useEventData } from "@/hooks/useEventData";
 import { rpc } from "@/lib/data/rpc";
 import type { TransactionRow } from "@/lib/types/db";
 import { cn, fmtTime } from "@/lib/utils";
+import { QuickAddPlayer, ResultsImport } from "@/components/manage/DataEntryTools";
 
 type Queue = "upcoming" | "unsold" | "all";
 
 export default function ControlRoom() {
-  const { event, session, players, playerById, analysis, transactions, teams, teamName, rules, reload } = useEventData();
+  const { event, session, players, playerById, analysis, transactions, teams, teamName, rules, reload, isTracker } = useEventData();
+  const [importing, setImporting] = useState(false);
   const m = (n: number | null | undefined) => fmtMoney(n, rules.currency);
   const eid = event!.id;
   const [q, setQ] = useState("");
@@ -60,13 +62,14 @@ export default function ControlRoom() {
   const warnings: string[] = [];
   if (current && t) {
     if (amt < current.base_price) warnings.push(`Below base price ${m(current.base_price)}.`);
-    if (!rules.allow_overspend && amt > t.remaining) warnings.push(`Exceeds ${t.team.name}'s remaining purse ${m(t.remaining)}.`);
+    if (amt > t.remaining) warnings.push(`${rules.allow_overspend ? "Warning: e" : "E"}xceeds ${t.team.name}'s remaining purse ${m(t.remaining)}.`);
     const allowed = cellAllowed(rules, t.rules.cellCounts, cellOf(current));
-    if (!allowed.ok) warnings.push(allowed.reason!);
+    if (!allowed.ok) warnings.push(`${rules.enforce_max_constraints === false ? "Warning: " : ""}${allowed.reason!}`);
     else if (amt > t.remaining - (t.floorReserve - (t.rules.mandatoryPlan.includes(cellOf(current)) ? analysis.market.floorPrice[cellOf(current)] : 0)) + 1e-9)
       warnings.push(`After this, ${t.team.name} may not afford its remaining mandatory players.`);
   }
-  const blocking = warnings.filter((w) => !w.startsWith("After this"));
+  // Only what the database would reject blocks the button; the rest are warnings (trackers record reality).
+  const blocking = warnings.filter((w) => !w.startsWith("After this") && !w.startsWith("Warning"));
   const sell = () =>
     current && teamId && amount &&
     run(async () => {
@@ -84,6 +87,16 @@ export default function ControlRoom() {
   return (
     <div className="space-y-4">
       {/* Session bar */}
+      {isTracker ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3">
+          <span className="text-sm"><b className="text-accent">Data entry</b> · every result appears on your crew&apos;s devices instantly</span>
+          <span className="text-xs text-muted">{sold}/{players.length} sold</span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setImporting(true)} disabled={busy}><Upload size={14} /> Import results (Excel/CSV)</Button>
+            <Button size="sm" variant="outline" onClick={undo} disabled={busy || !transactions.some((x) => x.status === "active")}><Undo2 size={14} /> Undo last</Button>
+          </div>
+        </Card>
+      ) : (
       <Card className="flex flex-wrap items-center gap-2 p-3">
         <span className="text-sm">Session: <b className={cn(status === "live" && "text-accent", status === "paused" && "text-warn")}>{status.replace("_", " ")}</b></span>
         <span className="text-xs text-muted">{sold}/{players.length} sold</span>
@@ -93,8 +106,11 @@ export default function ControlRoom() {
           {status === "completed" && <Button size="sm" variant="secondary" onClick={() => setStatus("paused")} disabled={busy}><RotateCcw size={14} /> Reopen</Button>}
           <Button size="sm" variant="outline" onClick={undo} disabled={busy || !transactions.some((x) => x.status === "active")}><Undo2 size={14} /> Undo last</Button>
           {status !== "completed" && <Button size="sm" variant="danger" onClick={() => confirm("Complete the auction? The official leaderboard will be finalised.") && setStatus("completed")} disabled={busy}><Square size={14} /> Complete</Button>}
+          <Button size="sm" variant="ghost" onClick={() => setImporting(true)} disabled={busy}><Upload size={14} /> Import</Button>
         </div>
       </Card>
+      )}
+      {importing && <ResultsImport onClose={() => setImporting(false)} />}
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">
         {/* Queue */}
@@ -115,8 +131,9 @@ export default function ControlRoom() {
                   </button>
                 </li>
               ))}
-              {!list.length && <li className="py-6 text-center text-xs text-muted">No players in this queue.</li>}
+              {!list.length && !q && <li className="py-6 text-center text-xs text-muted">No players in this queue.</li>}
             </ul>
+            {q.trim() && list.length === 0 && <QuickAddPlayer name={q.trim()} onAdded={async (id) => { setQ(""); await pick(id); }} />}
           </CardBody>
         </Card>
 

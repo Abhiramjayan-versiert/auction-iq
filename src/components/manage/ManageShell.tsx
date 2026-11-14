@@ -29,22 +29,45 @@ export function ManageShell({ eventId, user, isAdmin, children }: { eventId: str
   ];
   return (
     <EventDataProvider eventId={eventId}>
-      <AppShell nav={nav} user={user} eventId={eventId} header={<Header />}>
-        <Gate>{children}</Gate>
-      </AppShell>
+      <NavSwitch nav={nav} eventId={eventId} user={user}>{children}</NavSwitch>
     </EventDataProvider>
   );
 }
 
+/** Trackers get a slimmer data-entry menu that links back to the crew's analytics. */
+function NavSwitch({ nav, eventId, user, children }: { nav: NavGroup[]; eventId: string; user: { name: string; email: string; role: string }; children: ReactNode }) {
+  const { isTracker } = useEventData();
+  const b = `/manage/${eventId}`;
+  const trackerNav: NavGroup[] = [
+    {
+      title: "Data entry",
+      items: [
+        { href: `${b}/control-room`, label: "Record results", icon: "gavel" },
+        { href: `${b}/players`, label: "Players", icon: "players" },
+        { href: `${b}/teams`, label: "Teams", icon: "team" },
+        { href: `${b}/rules`, label: "Rules", icon: "rules" },
+        { href: `${b}/transactions`, label: "Entry history", icon: "transactions" },
+      ],
+    },
+    { title: "Insights", items: [{ href: `/e/${eventId}`, label: "Dashboard", icon: "dashboard" }, { href: `/e/${eventId}/live`, label: "Live workspace", icon: "live" }, { href: `/e/${eventId}/crew`, label: "Crew & roles", icon: "members" }] },
+    { items: [{ href: "/dashboard", label: "All my auctions", icon: "events" }] },
+  ];
+  return (
+    <AppShell nav={isTracker ? trackerNav : nav} user={user} eventId={eventId} header={<Header />}>
+      <Gate>{children}</Gate>
+    </AppShell>
+  );
+}
+
 function Header() {
-  const { event, session, connected } = useEventData();
+  const { event, session, connected, isTracker } = useEventData();
   return (
     <div className="flex items-center gap-3 min-w-0">
-      <Badge tone="info">Auctioneer</Badge>
+      <Badge tone="info">{isTracker ? "Data entry" : "Auctioneer"}</Badge>
       <span className="truncate text-sm font-semibold">{event?.name ?? "…"}</span>
       {session && <Badge tone={session.status === "live" ? "accent" : session.status === "paused" ? "warn" : "neutral"}>{session.status.replace("_", " ")}</Badge>}
       <span className={`hidden sm:inline-flex items-center gap-1 text-[11px] ${connected ? "text-ok" : "text-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-warn animate-pulse"}`} />{connected ? "Realtime" : "Reconnecting"}</span>
-      {event && <span className="ml-auto hidden font-mono text-xs text-muted md:inline">Code {event.invite_code}</span>}
+      {event && <span className="ml-auto hidden font-mono text-xs text-muted md:inline">{isTracker ? "Crew code" : "Code"} {event.invite_code}</span>}
     </div>
   );
 }

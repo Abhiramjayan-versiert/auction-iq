@@ -48,7 +48,7 @@ export function EventsClient({ events, orgs, auctioneers, assignments }: { event
               return (
                 <tr key={e.id} className="border-b border-line/40">
                   <td className="px-3 py-2"><div className="font-medium">{e.name}</div><div className="text-xs text-faint">{e.organizations?.name ?? "No organisation"} · {e.visibility}</div></td>
-                  <td><Badge tone={e.status === "live" ? "accent" : e.status === "completed" ? "info" : "neutral"}>{e.status}</Badge>{!e.is_active && <Badge tone="danger" className="ml-1">inactive</Badge>}</td>
+                  <td>{e.mode === "tracker" && <Badge tone="info" className="mr-1">tracker</Badge>}<Badge tone={e.status === "live" ? "accent" : e.status === "completed" ? "info" : "neutral"}>{e.status}</Badge>{!e.is_active && <Badge tone="danger" className="ml-1">inactive</Badge>}</td>
                   <td className="font-mono text-xs">{e.invite_code}</td>
                   <td className="text-xs">{auc.join(", ") || <span className="text-warn">none</span>}</td>
                   <td className="text-xs text-faint">{fmtDate(e.starts_at)}</td>

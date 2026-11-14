@@ -105,6 +105,8 @@ export interface RuleSet {
   rating_scale_max: number;
   currency: string;
   allow_overspend: boolean;
+  /** when false, rule maxima are warnings only (e.g. trackers recording an external auction) */
+  enforce_max_constraints?: boolean;
 }
 
 export interface RosterEntry {

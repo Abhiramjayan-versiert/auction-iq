@@ -49,12 +49,12 @@ export function JoinFlow() {
       router.push("/dashboard");
     } else {
       toast.success(`Joined ${preview.name}`);
-      router.push(`/e/${preview.id}/select-team`);
+      router.push(`/e/${preview.id}`);
     }
   };
   return (
     <div className="mx-auto max-w-lg">
-      <PageHeader title="Join an auction" description="Enter the invitation code your organiser shared." />
+      <PageHeader title="Join an auction or crew" description="Enter the invitation code from your organiser, or the crew code a teammate shared from their tracker." />
       <Card className="p-4">
         <form onSubmit={lookup} className="flex gap-2">
           <Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setPreview(null); }} placeholder="e.g. YAM2026X" className="font-mono uppercase tracking-widest" required />

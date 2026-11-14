@@ -16,7 +16,7 @@ import { fmtTime } from "@/lib/utils";
 
 export default function ParticipantDashboard() {
   const { me, prompt } = useMyTeam();
-  const { event, session, playerById, transactions, teamName, rules } = useEventData();
+  const { event, session, playerById, transactions, teamName, rules, isTracker } = useEventData();
   const { intel } = useWorkspace();
   const m = useMoney();
   const insights = useMemo(() => (me ? generateInsights(intel, me.team.id) : []), [intel, me]);
@@ -78,7 +78,7 @@ export default function ParticipantDashboard() {
                   <PlayerName p={current} sub />
                   <span className="text-right"><b className="tabular text-accent">{fmtRating(current.overall)}</b><div className="text-[11px] text-faint">base {m(current.base_price)}</div></span>
                 </div>
-              ) : <div className="mt-1 text-sm text-muted">Waiting for the auctioneer…</div>}
+              ) : <div className="mt-1 text-sm text-muted">{isTracker ? "Waiting for your data-entry teammate…" : "Waiting for the auctioneer…"}</div>}
               {session?.current_bid && session.bidding_open && <div className="mt-2 text-xs text-muted">Announced bid: <b className="text-fg">{m(session.current_bid)}</b> {session.current_bid_team_id && `· ${teamName(session.current_bid_team_id)}`}</div>}
             </div>
             {latest && playerById[latest.player_id] && (
