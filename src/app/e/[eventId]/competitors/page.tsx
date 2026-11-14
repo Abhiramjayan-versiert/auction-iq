@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { classifyTeams, FLAG_LABEL, fmtPct, fmtRating, predictCompetitor, type CompetitorFlag, type TeamAnalysis, cellLabel } from "@/lib/engine";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { Badge, Dialog, PageHeader } from "@/components/ui/misc";
 import { Button, buttonVariants } from "@/components/ui/button";

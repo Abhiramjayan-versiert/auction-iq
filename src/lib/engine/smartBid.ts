@@ -57,7 +57,7 @@ function percentile(p: Player, pool: Player[]) {
 function ceiling(a: EventAnalysis, t: TeamAnalysis, p: Player, strategy: Strategy) {
   const cell = cellOf(p);
   const allowed = cellAllowed(a.rules, t.rules.cellCounts, cell);
-  if (!allowed.ok) return { allowed, after: null, maxBid: 0, reserve: 0, floorReserve: 0, discretionary: 0, q: 0, fills: false };
+  if (!allowed.ok) return { allowed, after: null, maxBid: 0, reserve: 0, floorReserve: 0, discretionary: 0, q: 0, fills: false, spread: 1 };
   const after = analyseTeam(a.rules, t.team, [...t.entries, { player: p, price: 0, source: "estimated" }], a.market, t.initialPurse);
   const fills = t.rules.mandatoryPlan.includes(cell) || after.rules.slotsRequired < t.rules.slotsRequired;
   const floorReserve = reserveFor(after.rules, a.market, "floor");
@@ -67,16 +67,19 @@ function ceiling(a: EventAnalysis, t: TeamAnalysis, p: Player, strategy: Strateg
   const { cap } = STRATEGY_PARAMS[strategy];
   const qualityMult = 0.35 + 0.65 * q;
   const needMult = fills ? 1 : 0.7;
+  // Spread: with many slots still to fill, no single player should absorb most of the free budget.
+  const slotsAfter = after.rules.slotsRequired;
+  const spread = Math.min(1, 3 / (slotsAfter + 1));
   let maxBid = 0;
   const base = Number(p.base_price);
   if (discretionary >= base) {
-    maxBid = Math.min(discretionary, Math.max(base, discretionary * cap * qualityMult * needMult));
+    maxBid = Math.min(discretionary, Math.max(base, discretionary * cap * qualityMult * needMult * spread));
     maxBid = Math.max(base, floorToIncrement(maxBid, a.rules.bid_increment));
   }
   // Hard safety limit: never suggest more than purse minus floor reserve.
   maxBid = Math.min(maxBid, round2(t.remaining - floorReserve));
   if (maxBid < base) maxBid = 0;
-  return { allowed, after, maxBid: round2(maxBid), reserve, floorReserve, discretionary, q, fills };
+  return { allowed, after, maxBid: round2(maxBid), reserve, floorReserve, discretionary, q, fills, spread };
 }
 
 export function smartBid(a: EventAnalysis, myTeamId: string, p: Player, strategy: Strategy): SmartBidResult {
@@ -122,7 +125,12 @@ export function smartBid(a: EventAnalysis, myTeamId: string, p: Player, strategy
       }.`,
     );
     if (c.maxBid === 0) reasoning.push(`Discretionary budget is below the base price (${p.base_price}); bidding would endanger squad completion.`);
-    else reasoning.push(`Suggested ceiling ${c.maxBid} ${unit} (cap ${Math.round(STRATEGY_PARAMS[strategy].cap * 100)}% × quality × need, rounded to the bid increment).`);
+    else
+      reasoning.push(
+        `Suggested ceiling ${c.maxBid} ${unit} = free budget × ${Math.round(STRATEGY_PARAMS[strategy].cap * 100)}% strategy cap × quality × need${
+          c.spread < 1 ? ` × ${c.spread.toFixed(2)} spread (budget kept for ${after.rules.slotsRequired} more players)` : ""
+        }, rounded to the bid increment.`,
+      );
     if (top) reasoning.push(`${competitors.length} competitor(s) can afford this player; strongest likely ceiling: ${top.teamName} at ~${top.likelyCeiling} ${unit}.`);
     else reasoning.push("No competitor currently has both a free slot and the budget for this player.");
   }

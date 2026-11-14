@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const Card = ({ className, ...p }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("rounded-xl border border-line/70 bg-surface", className)} {...p} />
+  <div className={cn("min-w-0 rounded-xl border border-line/70 bg-surface", className)} {...p} />
 );
 export const CardHeader = ({ title, description, action, className }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) => (
   <div className={cn("flex items-start justify-between gap-3 px-4 pt-4 pb-2", className)}>

@@ -225,3 +225,31 @@ describe("scale", () => {
     expect(ms).toBeLessThan(2000);
   });
 });
+
+describe("smart bid — spec worked example", () => {
+  it("₹35 Cr purse with 3 mandatory slots suggests roughly ₹12 Cr (balanced)", () => {
+    const rules = { ...exampleRules(), squad_min: 4, squad_max: 4, min_player_price: 5, constraints: [] };
+    const owned = mkPlayer("BAT", "indian", 9, 5);
+    const pool: Player[] = [];
+    for (let i = 0; i < 12; i++) pool.push(mkPlayer("BOWL", "indian", 7 + i * 0.25, 5));
+    const a = analyseEvent({ rules, teams: [mkTeam("A")], players: [owned, ...pool], transactions: [sale(owned, "A", 65)] });
+    expect(a.byId.A.remaining).toBe(35);
+    expect(a.byId.A.floorReserve).toBe(15);
+    const star = pool[pool.length - 1];
+    const r = smartBid(a, "A", star, "balanced");
+    expect(r.minimumReserve).toBe(10); // 2 slots left after this purchase × ₹5 Cr
+    expect(r.maxBid).toBeGreaterThanOrEqual(9);
+    expect(r.maxBid).toBeLessThanOrEqual(16);
+    expect(r.maxBid).toBeLessThanOrEqual(35 - 10);
+  });
+
+  it("caps single-player spend early in the auction", () => {
+    const rules = exampleRules(); // 9 mandatory slots
+    const pool: Player[] = [];
+    for (let i = 0; i < 20; i++) pool.push(mkPlayer(i % 2 ? "BAT" : "BOWL", "indian", 7 + (i % 10) * 0.25, 1));
+    const a = analyseEvent({ rules, teams: [mkTeam("A")], players: pool, transactions: [] });
+    const best = pool.filter((p) => p.category === "BAT").sort((x, y) => (y.overall ?? 0) - (x.overall ?? 0))[0];
+    const r = smartBid(a, "A", best, "aggressive");
+    expect(r.maxBid).toBeLessThan(a.byId.A.remaining * 0.5);
+  });
+});

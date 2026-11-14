@@ -41,6 +41,7 @@ export interface Player {
   sold_team_id?: string | null;
   sold_price?: number | null;
   rating_source?: string | null;
+  lot_number?: number | null;
 }
 
 export interface Team {

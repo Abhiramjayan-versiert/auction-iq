@@ -563,6 +563,13 @@ begin
   update profiles set platform_role = 'super_admin', status = 'active' where lower(email) = lower(p_email);
   if not found then raise exception 'No profile with email %', p_email; end if;
 end; $$;
+
+-- ---------------------------------------------------------------------
+-- Function privileges. Signed-out (anon) clients may not call any RPC;
+-- internal helpers are not callable by clients at all.
+-- ---------------------------------------------------------------------
+revoke execute on all functions in schema public from public, anon;
+grant execute on all functions in schema public to authenticated, service_role;
 revoke execute on function public.promote_super_admin(text) from public, anon, authenticated;
 revoke execute on function public._record_sale(uuid, uuid, uuid, numeric, text) from public, anon, authenticated;
 revoke execute on function public._void_transaction(uuid, text) from public, anon, authenticated;

@@ -30,6 +30,7 @@ export function toPlayer(p: PlayerRow): Player {
     sold_team_id: p.sold_team_id,
     sold_price: num(p.sold_price),
     rating_source: r?.source ?? null,
+    lot_number: p.lot_number,
   };
 }
 

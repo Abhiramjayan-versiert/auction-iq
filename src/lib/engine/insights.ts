@@ -186,7 +186,7 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
   // 6. Priority: scarce categories first
   const myCells = [...new Set(me.rules.mandatoryPlan)];
   const scarce = myCells
-    .map((c) => ({ c, supply: a.market.supply[c], demand: a.market.demand[c] }))
+    .map((c) => ({ c, supply: a.market.supply[c], demand: a.market.demand[c], teams: a.market.demandTeams[c] }))
     .filter((x) => x.supply <= x.demand)
     .sort((x, y) => x.supply - x.demand - (y.supply - y.demand));
   if (scarce[0]) {
@@ -195,13 +195,13 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
       id: `prio-${s.c}`,
       severity: "warning",
       topic: "priority",
-      title: `Prioritise a ${cellLabel(s.c).toLowerCase()}`,
-      detected: `Only ${s.supply} ${cellLabel(s.c).toLowerCase()}(s) remain while ${s.demand} team(s) still need one.`,
+      title: `Prioritise: ${cellLabel(s.c).toLowerCase()}`,
+      detected: `Only ${s.supply} ${cellLabel(s.c).toLowerCase()}(s) remain in the pool, while ${s.teams} team(s) still need ${s.demand} in total.`,
       why: "Scarce mandatory categories get expensive or run out before the auction ends.",
       action: `Secure a ${cellLabel(s.c).toLowerCase()} before spending on discretionary players.`,
       impact: "Avoids an unfillable mandatory slot.",
       confidence: s.supply < s.demand ? "high" : "medium",
-      calculation: `supply ${s.supply} vs demand ${s.demand}`,
+      calculation: `supply ${s.supply} vs required slots ${s.demand} (${s.teams} teams)`,
     });
   }
 

@@ -12,7 +12,10 @@ export interface MarketStats {
   /** expected rating of a player a team will realistically get in a cell (median of available) */
   expectedRating: Record<Cell, number | null>;
   supply: Record<Cell, number>;
+  /** mandatory slots still required in each cell, across all teams */
   demand: Record<Cell, number>;
+  /** number of distinct teams that still need at least one player in each cell */
+  demandTeams: Record<Cell, number>;
   soldCount: number;
   avgSoldPrice: number | null;
   globalFloor: number;
@@ -92,7 +95,7 @@ export function buildRosters(s: EventSnapshot) {
   return { rosters, officiallySold };
 }
 
-function marketStats(s: EventSnapshot, taken: Set<string>): Omit<MarketStats, "demand"> {
+function marketStats(s: EventSnapshot, taken: Set<string>): Omit<MarketStats, "demand" | "demandTeams"> {
   const available = s.players.filter(
     (p) => !taken.has(p.id) && (p.auction_status === "available" || p.auction_status === "upcoming" || p.auction_status === "unsold"),
   );
@@ -137,7 +140,7 @@ function marketStats(s: EventSnapshot, taken: Set<string>): Omit<MarketStats, "d
   };
 }
 
-export function reserveFor(evaluation: RuleEvaluation, market: Omit<MarketStats, "demand">, strategy: Strategy | "floor" | "expected") {
+export function reserveFor(evaluation: RuleEvaluation, market: Omit<MarketStats, "demand" | "demandTeams">, strategy: Strategy | "floor" | "expected") {
   const priceOf = (cell: Cell | "ANY") => {
     const floor = cell === "ANY" ? market.globalFloor : market.floorPrice[cell];
     const exp =
@@ -160,7 +163,7 @@ export function reserveFor(evaluation: RuleEvaluation, market: Omit<MarketStats,
   return round2(r);
 }
 
-function projectRating(evaluation: RuleEvaluation, rating: TeamRating, market: Omit<MarketStats, "demand">) {
+function projectRating(evaluation: RuleEvaluation, rating: TeamRating, market: Omit<MarketStats, "demand" | "demandTeams">) {
   const fallback = mean(market.available.map((p) => p.overall).filter((x): x is number => typeof x === "number"));
   let total = rating.total;
   let n = rating.count;
@@ -182,7 +185,7 @@ export function analyseTeam(
   rules: RuleSet,
   team: Team,
   entries: RosterEntry[],
-  market: Omit<MarketStats, "demand">,
+  market: Omit<MarketStats, "demand" | "demandTeams">,
   purseOverride?: number,
 ): TeamAnalysis {
   const players = entries.map((e) => e.player);
@@ -289,8 +292,12 @@ export function analyseEvent(s: EventSnapshot): EventAnalysis {
   const base = marketStats(s, taken);
   const teams = s.teams.map((t) => analyseTeam(s.rules, t, rosters[t.id], base, s.purseOverrides?.[t.id]));
   const demand = Object.fromEntries(ALL_CELLS.map((c) => [c, 0])) as Record<Cell, number>;
-  for (const t of teams) for (const c of t.rules.mandatoryPlan) demand[c]++;
-  const market: MarketStats = { ...base, demand };
+  const demandTeams = { ...demand };
+  for (const t of teams) {
+    for (const c of t.rules.mandatoryPlan) demand[c]++;
+    for (const c of new Set(t.rules.mandatoryPlan)) demandTeams[c]++;
+  }
+  const market: MarketStats = { ...base, demand, demandTeams };
   return {
     rules: s.rules,
     teams,

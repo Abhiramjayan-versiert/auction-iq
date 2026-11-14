@@ -32,13 +32,14 @@ export function predictCompetitor(a: EventAnalysis, t: TeamAnalysis): Competitor
     .map((cell) => {
       const supply = a.market.supply[cell];
       const demand = a.market.demand[cell];
+      const demandTeams = a.market.demandTeams[cell];
       const scarcity = supply ? demand / supply : Infinity;
       const needCount = t.rules.mandatoryPlan.filter((c) => c === cell).length;
       const evidence = [
         `Needs ${needCount} more ${cellLabel(cell).toLowerCase()}${needCount > 1 ? "s" : ""} to meet the rules.`,
         `${t.rules.slotsRequired} mandatory squad position(s) remain.`,
         `Current purse ${t.remaining} ${unit}.`,
-        `${supply} such player(s) left in the pool, ${demand} team(s) need one.`,
+        `${supply} such player(s) left in the pool; ${demandTeams} team(s) need ${demand} in total.`,
       ];
       const confidence: Confidence = cells.length === 1 || scarcity >= 1 ? "high" : "medium";
       return { cell, confidence, evidence, score: scarcity * needCount };

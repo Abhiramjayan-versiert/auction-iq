@@ -198,6 +198,9 @@ export function SmartBidPanel({ player, compact, analysis }: { player: Player | 
           </div>
         )}
       </div>
+      {res.blockedReason ? (
+        <p className="mt-3 text-xs text-muted">This player cannot join your squad under the event rules, so no bid is recommended. Current team rating {fmtRating(res.currentAverage)}.</p>
+      ) : (
       <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
         <div>
           {row("Current team rating", fmtRating(res.currentAverage))}
@@ -215,6 +218,7 @@ export function SmartBidPanel({ player, compact, analysis }: { player: Player | 
           {row("Expected value", res.expectedValue === null ? "—" : `${res.expectedValue.toFixed(2)} rating / ${rules.currency}`)}
         </div>
       </div>
+      )}
       {!compact && (
         <>
           <div className="mt-3">

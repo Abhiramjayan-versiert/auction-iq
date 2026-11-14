@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:db": "scripts/db-test.sh",
+    "test:smoke": "node scripts/smoke.cjs",
+    "preview:mock": "node scripts/e2e/mock-supabase.cjs",
+    "test:e2e": "node scripts/e2e/walk-pages.cjs && node scripts/e2e/interact.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

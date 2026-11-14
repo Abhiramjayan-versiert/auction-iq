@@ -137,7 +137,7 @@ export function evaluateRules(rules: RuleSet, players: Pick<Player, "origin" | "
 
   const { plan, counts: after, feasible: planFeasible } = planFill(rules, counts);
   const afterSize = size + plan.length;
-  let flexSlots = Math.max(0, rules.squad_min - afterSize);
+  const flexSlots = Math.max(0, rules.squad_min - afterSize);
   // make sure flex slots can actually be placed somewhere
   let flexFeasible = true;
   if (flexSlots > 0) {

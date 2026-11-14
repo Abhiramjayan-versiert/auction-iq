@@ -144,5 +144,14 @@ select pg_temp.check((select count(*) from activity_logs where action like 'tran
 select pg_temp.as_user('00000000-0000-0000-0000-000000000004');
 select pg_temp.check((select count(*) from auction_transactions where status = 'active') = 4, 'participant sees official tx');
 select pg_temp.check((select count(*) from activity_logs) = 0, 'participant cannot read audit log');
+-- signed-out clients cannot call RPCs or read data
+select pg_temp.as_user(null);
+set role anon;
+select pg_temp.expect_error($$select join_event('FEST2026')$$, 'permission denied');
+select pg_temp.expect_error($$select count(*) from players$$, 'permission denied');
+reset role;
+select pg_temp.as_user('00000000-0000-0000-0000-000000000003');
+select pg_temp.expect_error($$select recompute_team('20000000-0000-0000-0000-000000000001')$$, 'permission denied');
+select pg_temp.expect_error($$select promote_super_admin('p1@example.com')$$, 'permission denied');
 select pg_temp.as_user(null);
 \echo 'auction flow: OK'
