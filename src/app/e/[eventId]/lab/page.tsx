@@ -105,7 +105,7 @@ export default function Lab() {
             <div className="flex justify-between"><span className="text-muted">Your purse</span><b className="tabular">{me.purseKnown ? m(me.remaining) : "not set"}</b></div>
             <div className="text-xs text-muted">Slots: {me.completion.slots.map((s) => (s === "ANY" ? "any role" : cellLabel(s))).join(", ") || "none"}</div>
             <div className="text-xs text-faint">Prices: {FLOOR_SOURCE_LABEL[intel.market.floorSource]}.</div>
-            {me.completion.provisional && <Badge tone="warn">Provisional — not enough unsold players recorded to price every slot</Badge>}
+            {me.completion.provisional && <p className="text-xs text-warn">Provisional — not enough unsold players recorded to price every slot.</p>}
           </CardBody>
         </Card>
         <Card>
