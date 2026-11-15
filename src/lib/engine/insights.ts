@@ -2,6 +2,7 @@ import type { EventAnalysis } from "./analysis";
 import { mean, round2 } from "./money";
 import type { Confidence } from "./predictions";
 import { cellAllowed, cellLabel, cellOf } from "./rules";
+import { scarcity, weaknessScan } from "./intel";
 
 export type InsightSeverity = "critical" | "warning" | "opportunity" | "info";
 export type InsightTopic = "own_rules" | "purse" | "strength" | "competitor" | "opportunity" | "priority";
@@ -48,7 +49,20 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
       });
     }
   }
-  if (!me.purseSufficient) {
+  if (!me.purseKnown) {
+    out.push({
+      id: "own-purse-unknown",
+      severity: "info",
+      topic: "purse",
+      title: "Your initial purse isn't set",
+      detected: "The organiser hasn't entered your team's starting purse.",
+      why: "Remaining purse, reserves, Smart Bid and purse alerts need it.",
+      action: "Ask the organiser or data-entry operator to set it (or enter your own estimate in the purse calculator).",
+      impact: "Unlocks every purse-based recommendation.",
+      confidence: "high",
+      calculation: "initial purse = not set",
+    });
+  } else if (!me.purseSufficient) {
     out.push({
       id: "own-purse",
       severity: "critical",
@@ -61,7 +75,7 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
       confidence: "high",
       calculation: `floor reserve = Σ cheapest base price per mandatory slot = ${me.floorReserve}`,
     });
-  } else if (me.rules.slotsRequired > 0 && me.discretionary < me.floorReserve * 0.25) {
+  } else if (me.rules.slotsRequired > 0 && me.floorReserve > 0 && me.discretionary < me.floorReserve * 0.25) {
     out.push({
       id: "own-purse-tight",
       severity: "warning",
@@ -103,6 +117,7 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
 
   // 3. Competitor pressure
   for (const t of others) {
+    if (!t.purseKnown) continue;
     if (t.utilization >= 0.7 && t.rules.slotsRequired >= 2) {
       out.push({
         id: `comp-pressure-${t.team.id}`,
@@ -137,12 +152,16 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
   // 4. Best improvement opportunity
   if (me.rules.slotsRemaining > 0) {
     const fitting = a.market.available
-      .filter((p) => p.overall !== null && cellAllowed(a.rules, me.rules.cellCounts, cellOf(p)).ok)
-      .filter((p) => Number(p.base_price) <= me.discretionary + (a.market.floorPrice[cellOf(p)] ?? 0))
+      .filter((p) => p.overall !== null && cellAllowed(a.rules, me.rules.cellCounts, cellOf(p), me.rules.size).ok)
+      .filter((p) => {
+        const c = cellOf(p);
+        return !me.purseKnown || Number(p.base_price) <= me.discretionary + (c ? a.market.floorPrice[c] : a.market.globalFloor);
+      })
       .map((p) => {
-        const n = me.rating.count;
+        const n = me.rating.ratedCount;
         const newAvg = (me.rating.total + (p.overall as number)) / (n + 1);
-        return { p, newAvg, fills: me.rules.mandatoryPlan.includes(cellOf(p)) };
+        const c = cellOf(p);
+        return { p, newAvg, fills: c !== null && me.rules.mandatoryPlan.includes(c) };
       })
       .sort((x, y) => Number(y.fills) - Number(x.fills) || y.newAvg - x.newAvg);
     const best = fitting[0];
@@ -159,14 +178,14 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
         action: "Open Smart Bid for this player to get your bid ceiling.",
         impact: `${me.rating.average !== null ? `+${round2(best.newAvg - me.rating.average)}` : best.newAvg.toFixed(2)} average rating.`,
         confidence: best.fills ? "high" : "medium",
-        calculation: `(${me.rating.total} + ${best.p.overall}) ÷ ${me.rating.count + 1} = ${best.newAvg.toFixed(2)}`,
+        calculation: `(${me.rating.total} + ${best.p.overall}) ÷ ${me.rating.ratedCount + 1} = ${best.newAvg.toFixed(2)}`,
       });
     }
   }
 
   // 5. Budget flexibility
-  if (others.length) {
-    const weaker = others.filter((t) => t.discretionary < me.discretionary).length;
+  if (others.length && me.purseKnown) {
+    const weaker = others.filter((t) => t.purseKnown && t.discretionary < me.discretionary).length;
     if (weaker > 0) {
       out.push({
         id: "flex",
@@ -184,7 +203,7 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
   }
 
   // 6. Priority: scarce categories first
-  const myCells = [...new Set(me.rules.mandatoryPlan)];
+  const myCells = scarcity(a).reliable ? [...new Set(me.rules.mandatoryPlan)] : [];
   const scarce = myCells
     .map((c) => ({ c, supply: a.market.supply[c], demand: a.market.demand[c], teams: a.market.demandTeams[c] }))
     .filter((x) => x.supply <= x.demand)
@@ -196,12 +215,28 @@ export function generateInsights(a: EventAnalysis, myTeamId: string): Insight[] 
       severity: "warning",
       topic: "priority",
       title: `Prioritise: ${cellLabel(s.c).toLowerCase()}`,
-      detected: `Only ${s.supply} ${cellLabel(s.c).toLowerCase()}(s) remain in the pool, while ${s.teams} team(s) still need ${s.demand} in total.`,
-      why: "Scarce mandatory categories get expensive or run out before the auction ends.",
+      detected: `Only ${s.supply} unsold ${cellLabel(s.c).toLowerCase()}(s) have been recorded so far, while ${s.teams} team(s) still need ${s.demand} in total.`,
+      why: "Scarce mandatory categories get expensive or run out before the auction ends (players not yet entered are unknown).",
       action: `Secure a ${cellLabel(s.c).toLowerCase()} before spending on discretionary players.`,
       impact: "Avoids an unfillable mandatory slot.",
       confidence: s.supply < s.demand ? "high" : "medium",
       calculation: `supply ${s.supply} vs required slots ${s.demand} (${s.teams} teams)`,
+    });
+  }
+
+  // 7. Weakness scanner (only where the recorded data supports it)
+  for (const w of weaknessScan(a, myTeamId)) {
+    out.push({
+      id: `weak-${w.kind}`,
+      severity: w.severity,
+      topic: "strength",
+      title: w.title,
+      detected: w.detected,
+      why: w.why,
+      action: w.improve,
+      impact: w.impact,
+      confidence: w.confidence,
+      calculation: w.calculation,
     });
   }
 

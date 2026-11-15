@@ -32,6 +32,8 @@ export interface EventData {
   userId: string | null;
   myTeamId: string | null;
   canManage: boolean;
+  /** this user's membership role in the event (null for Super Admins without membership) */
+  myRole: "auctioneer" | "participant" | "data_entry" | "analyst" | null;
   /** private tracker for an auction run outside the app */
   isTracker: boolean;
   /** tracker owner (manages crew) */
@@ -68,6 +70,7 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
     userId: null,
     ownTeamId: null,
     canManage: false,
+    myRole: null,
     lastUpdated: null,
   });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,7 +78,7 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
   const load = useCallback(async () => {
     const { data: auth } = await sb.auth.getUser();
     const uid = auth.user?.id ?? null;
-    const [ev, rules, cons, teams, players, txs, session, tm, manage] = await Promise.all([
+    const [ev, rules, cons, teams, players, txs, session, tm, manage, mine] = await Promise.all([
       sb.from("events").select("*, organizations(name)").eq("id", eventId).maybeSingle(),
       sb.from("auction_rules").select("*").eq("event_id", eventId).maybeSingle(),
       sb.from("rule_constraints").select("*").eq("event_id", eventId),
@@ -85,6 +88,7 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
       sb.from("auction_sessions").select("*").eq("event_id", eventId).maybeSingle(),
       sb.from("team_members").select("*").eq("event_id", eventId),
       sb.rpc("can_manage_event", { p_event: eventId }),
+      uid ? sb.from("event_members").select("role").eq("event_id", eventId).eq("user_id", uid).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     const err = ev.error || rules.error || cons.error || teams.error || players.error || txs.error || session.error || tm.error;
     if (err || !ev.data) {
@@ -111,6 +115,7 @@ export function EventDataProvider({ eventId, perspectiveTeamId, children }: { ev
       userId: uid,
       ownTeamId: members.find((m) => m.user_id === uid)?.team_id ?? null,
       canManage: Boolean(manage.data),
+      myRole: ((mine.data as { role?: EventData["myRole"] } | null)?.role ?? null) as EventData["myRole"],
       lastUpdated: new Date(),
     }));
   }, [eventId, sb]);

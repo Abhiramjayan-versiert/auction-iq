@@ -10,3 +10,7 @@ export * from "./competitors";
 export * from "./insights";
 export * from "./simulate";
 export * from "./alerts";
+export * from "./intel";
+export * from "./montecarlo";
+export * from "./shadow";
+export * from "./copilot";

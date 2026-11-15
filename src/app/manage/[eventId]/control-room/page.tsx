@@ -62,10 +62,11 @@ export default function ControlRoom() {
   const warnings: string[] = [];
   if (current && t) {
     if (amt < current.base_price) warnings.push(`Below base price ${m(current.base_price)}.`);
-    if (amt > t.remaining) warnings.push(`${rules.allow_overspend ? "Warning: e" : "E"}xceeds ${t.team.name}'s remaining purse ${m(t.remaining)}.`);
-    const allowed = cellAllowed(rules, t.rules.cellCounts, cellOf(current));
+    if (t.purseKnown && amt > t.remaining) warnings.push(`${rules.allow_overspend ? "Warning: e" : "E"}xceeds ${t.team.name}'s remaining purse ${m(t.remaining)}.`);
+    const curCell = cellOf(current);
+    const allowed = cellAllowed(rules, t.rules.cellCounts, curCell, t.rules.size);
     if (!allowed.ok) warnings.push(`${rules.enforce_max_constraints === false ? "Warning: " : ""}${allowed.reason!}`);
-    else if (amt > t.remaining - (t.floorReserve - (t.rules.mandatoryPlan.includes(cellOf(current)) ? analysis.market.floorPrice[cellOf(current)] : 0)) + 1e-9)
+    else if (t.purseKnown && amt > t.remaining - (t.floorReserve - (curCell && t.rules.mandatoryPlan.includes(curCell) ? analysis.market.floorPrice[curCell] : 0)) + 1e-9)
       warnings.push(`After this, ${t.team.name} may not afford its remaining mandatory players.`);
   }
   // Only what the database would reject blocks the button; the rest are warnings (trackers record reality).

@@ -75,12 +75,10 @@ export function contestedPlayers(a: EventAnalysis, limit = 10): ContestedPlayer[
     .map((p) => ({
       player: p,
       interestedTeams: a.teams
-        .filter(
-          (t) =>
-            cellAllowed(a.rules, t.rules.cellCounts, cellOf(p)).ok &&
-            t.rules.mandatoryPlan.includes(cellOf(p)) &&
-            t.maxSingleBid >= Number(p.base_price),
-        )
+        .filter((t) => {
+          const c = cellOf(p);
+          return c !== null && cellAllowed(a.rules, t.rules.cellCounts, c, t.rules.size).ok && t.rules.mandatoryPlan.includes(c) && t.purseKnown && t.maxSingleBid >= Number(p.base_price);
+        })
         .map((t) => ({ teamId: t.team.id, teamName: t.team.name, capacity: t.maxSingleBid })),
     }))
     .filter((c) => c.interestedTeams.length >= 2)

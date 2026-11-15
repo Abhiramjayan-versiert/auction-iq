@@ -44,7 +44,7 @@ function Inner({ eventId, user, perspective, onPerspective, children }: { eventI
   const nav: NavGroup[] = [
     {
       items: [
-        { href: b, label: "Dashboard", icon: "dashboard", exact: true },
+        { href: b, label: "War Room", icon: "dashboard", exact: true },
         { href: `${b}/live`, label: "Live workspace", icon: "live" },
         { href: `${b}/team`, label: "My Team", icon: "team" },
       ],
@@ -54,7 +54,7 @@ function Inner({ eventId, user, perspective, onPerspective, children }: { eventI
     nav.push({
       title: isTracker ? "Data entry" : "Auctioneer",
       items: [
-        { href: `/manage/${eventId}/control-room`, label: isTracker ? "Record results" : "Control room", icon: "gavel" },
+        { href: `/manage/${eventId}/entry`, label: "Live data entry", icon: "list" },
         { href: `/manage/${eventId}/players`, label: "Players", icon: "players" },
         { href: `/manage/${eventId}/teams`, label: "Teams", icon: "team" },
         { href: `/manage/${eventId}/rules`, label: "Rules", icon: "rules" },
@@ -65,6 +65,8 @@ function Inner({ eventId, user, perspective, onPerspective, children }: { eventI
     {
       title: "Intelligence",
       items: [
+        { href: `${b}/insights`, label: "Insights", icon: "smartbid" },
+        { href: `${b}/copilot`, label: "Auction Co-Pilot", icon: "book" },
         { href: `${b}/competitors`, label: "Competitors", icon: "intel" },
         { href: `${b}/compare`, label: "Team comparison", icon: "compare" },
         { href: `${b}/leaderboard`, label: "Leaderboard", icon: "leaderboard" },
@@ -77,6 +79,9 @@ function Inner({ eventId, user, perspective, onPerspective, children }: { eventI
         { href: `${b}/smart-bid`, label: "Smart Bid", icon: "smartbid" },
         { href: `${b}/purse-planner`, label: "Purse planner", icon: "purse" },
         { href: `${b}/simulator`, label: "What-if simulator", icon: "simulator" },
+        { href: `${b}/shadow`, label: "Shadow auction", icon: "compare" },
+        { href: `${b}/lab`, label: "Strategy lab", icon: "gauge" },
+        { href: `${b}/analytics`, label: "Analytics", icon: "chart" },
       ],
     },
     {
@@ -92,7 +97,19 @@ function Inner({ eventId, user, perspective, onPerspective, children }: { eventI
     { items: [{ href: "/dashboard", label: "All my auctions", icon: "events" }] },
   );
   return (
-    <AppShell nav={nav} user={user} eventId={eventId} header={<Header onPerspective={onPerspective} perspective={perspective} />}>
+    <AppShell
+      nav={nav}
+      user={user}
+      eventId={eventId}
+      header={<Header onPerspective={onPerspective} perspective={perspective} />}
+      bottomNav={[
+        { href: b, label: "War Room", icon: "dashboard", exact: true },
+        { href: `${b}/team`, label: "My Team", icon: "team" },
+        { href: `${b}/competitors`, label: "Competitors", icon: "intel" },
+        { href: `${b}/insights`, label: "Insights", icon: "smartbid" },
+        { href: "/profile", label: "Profile", icon: "members" },
+      ]}
+    >
       <Gate>{children}</Gate>
     </AppShell>
   );
@@ -108,7 +125,10 @@ function Header({ onPerspective, perspective }: { onPerspective: (id: string) =>
       {isTracker ? (
         <Badge tone={canManage ? "accent" : "info"}>{canManage ? "Data entry" : "Analyst · live view"}</Badge>
       ) : (
-        session && <Badge tone={session.status === "live" ? "accent" : session.status === "paused" ? "warn" : "neutral"}>{session.status.replace("_", " ")}</Badge>
+        session && (() => {
+          const st = session.status === "not_started" ? event?.status ?? "upcoming" : session.status;
+          return <Badge tone={st === "live" ? "accent" : st === "paused" ? "warn" : "neutral"}>{st.replace("_", " ")}</Badge>;
+        })()
       )}
       <span className={`hidden sm:inline-flex items-center gap-1 text-[11px] ${connected ? "text-ok" : "text-warn"}`}>
         <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-warn animate-pulse"}`} />

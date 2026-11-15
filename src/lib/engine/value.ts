@@ -26,8 +26,9 @@ export function playerValues(a: EventAnalysis, players: Player[], myTeamId?: str
       const newAvg = (me.rating.total + p.overall) / (n + 1);
       improvement = round2(newAvg - (me.rating.average ?? 0));
       if (n === 0) improvement = round2(newAvg);
-      fitsNeeds = me.rules.mandatoryPlan.includes(cellOf(p));
-      allowed = cellAllowed(a.rules, me.rules.cellCounts, cellOf(p)).ok;
+      const c = cellOf(p);
+      fitsNeeds = c !== null && me.rules.mandatoryPlan.includes(c);
+      allowed = cellAllowed(a.rules, me.rules.cellCounts, c, me.rules.size).ok;
     }
     return { player: p, price, efficiency, valueIndex: null as number | null, improvement, fitsNeeds, allowed };
   });
@@ -35,9 +36,9 @@ export function playerValues(a: EventAnalysis, players: Player[], myTeamId?: str
   const byCat = new Map<string, PlayerValue[]>();
   for (const r of rows) {
     if (r.efficiency === null) continue;
-    const list = byCat.get(r.player.category) ?? [];
+    const list = byCat.get(r.player.category ?? "unknown") ?? [];
     list.push(r);
-    byCat.set(r.player.category, list);
+    byCat.set(r.player.category ?? "unknown", list);
   }
   for (const list of byCat.values()) {
     const logs = list.map((r) => Math.log(r.efficiency as number));

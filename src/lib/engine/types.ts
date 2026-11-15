@@ -23,8 +23,10 @@ export interface Player {
   name: string;
   photo_url?: string | null;
   nationality?: string | null;
-  origin: Origin;
-  category: Category;
+  /** null when the operator did not record it — never guessed */
+  origin: Origin | null;
+  /** null when the operator did not record it — never guessed */
+  category: Category | null;
   secondary_category?: Category | null;
   batting_style?: string | null;
   bowling_style?: string | null;
@@ -50,7 +52,8 @@ export interface Team {
   short_name?: string | null;
   logo_url?: string | null;
   color?: string | null;
-  initial_purse: number;
+  /** null when the organiser has not set it yet: purse calculations are disabled for the team */
+  initial_purse: number | null;
 }
 
 export interface Transaction {

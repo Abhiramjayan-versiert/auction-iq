@@ -4,6 +4,8 @@ import type { Player, RuleSet, Weights } from "./types";
 
 export interface TeamRating {
   count: number;
+  /** players with a recorded rating — averages use only these */
+  ratedCount: number;
   total: number;
   /** Official basic formula: total of overall ratings / players purchased. */
   average: number | null;
@@ -25,7 +27,7 @@ export function balanceScore(rules: RuleSet, evaluation: RuleEvaluation, players
   const progress = mins.length
     ? mins.reduce((a, s) => a + Math.min(s.count, s.constraint.min as number) / (s.constraint.min as number), 0) / mins.length
     : Math.min(1, players.length / Math.max(1, rules.squad_min));
-  const cats = new Set(players.map((p) => p.category)).size;
+  const cats = new Set(players.map((p) => p.category).filter(Boolean)).size;
   const coverage = cats / 4;
   const violations = evaluation.statuses.filter((s) => s.state === "violation").length;
   return Math.max(0, Math.min(100, round2((0.7 * progress + 0.3 * coverage) * 100 - violations * 25)));
@@ -55,9 +57,10 @@ export function rateTeam(rules: RuleSet, evaluation: RuleEvaluation, players: Pl
   };
   const base = {
     count: players.length,
+    ratedCount: overall.length,
     total,
     average: overall.length ? round2(total / overall.length) : null,
-    batting: avg(vals(players.filter((p) => p.category !== "BOWL").map((p) => p.batting ?? null))),
+    batting: avg(vals(players.filter((p) => p.category === "BAT" || p.category === "WK" || p.category === "AR").map((p) => p.batting ?? null))),
     bowling: avg(vals(players.filter((p) => p.category === "BOWL" || p.category === "AR").map((p) => p.bowling ?? null))),
     allrounder: avg(vals(players.filter((p) => p.category === "AR").map((p) => p.overall))),
     wicketkeeping: avg(vals(players.filter((p) => p.category === "WK").map((p) => p.wicketkeeping ?? p.overall))),

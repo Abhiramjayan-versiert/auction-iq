@@ -134,8 +134,8 @@ export default function LiveWorkspace() {
           <CardBody>
             <ul className="space-y-1 text-xs">
               {shortlist.filter((s) => s.list !== "avoid").sort((x, y) => x.priority - y.priority).slice(0, 10).map((s) => {
-                const pl = playerById[s.player_id];
-                if (!pl) return null;
+                const pl = s.player_id ? playerById[s.player_id] : null;
+                if (!pl) return <li key={s.id} className="flex justify-between gap-2 text-muted"><span>{s.player_name} <Badge>watching</Badge></span><span>not entered yet</span></li>;
                 return (
                   <li key={s.id} className="flex justify-between gap-2">
                     <span className={cn("truncate", pl.auction_status === "sold" && "line-through text-faint")}>{pl.name} <Badge>{s.list}</Badge></span>

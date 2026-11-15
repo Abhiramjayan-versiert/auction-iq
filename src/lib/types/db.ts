@@ -52,7 +52,7 @@ export interface TeamRow {
   short_name: string | null;
   logo_url: string | null;
   color: string | null;
-  initial_purse: number;
+  initial_purse: number | null;
 }
 
 export interface TeamMemberRow {
@@ -90,8 +90,8 @@ export interface PlayerRow {
   name: string;
   photo_url: string | null;
   nationality: string | null;
-  origin: Origin;
-  category: Category;
+  origin: Origin | null;
+  category: Category | null;
   secondary_category: Category | null;
   batting_style: string | null;
   bowling_style: string | null;
@@ -152,6 +152,7 @@ export interface TransactionRow {
   amount: number | null;
   type: "sale" | "unsold";
   status: "active" | "voided";
+  client_ref?: string | null;
   note: string | null;
   voided_reason: string | null;
   created_at: string;
@@ -185,7 +186,12 @@ export interface ShortlistRow {
   id: string;
   user_id: string;
   event_id: string;
-  player_id: string;
+  /** null when watching a player by name before the operator has entered them */
+  player_id: string | null;
+  player_name: string | null;
+  target_price: number | null;
+  private_rating: number | null;
+  high_priority: boolean;
   list: "target" | "backup" | "avoid";
   priority: number;
   note: string | null;
@@ -195,7 +201,7 @@ export interface SimRow {
   id: string;
   user_id: string;
   event_id: string;
-  scenario: "A" | "B" | "C";
+  scenario: "A" | "B" | "C" | "S";
   player_id: string;
   team_id: string;
   price: number;

@@ -12,13 +12,15 @@ import {
 export type Cell = `${Origin}:${Category}`;
 export const ALL_CELLS: Cell[] = ORIGINS.flatMap((o) => CATEGORIES.map((c) => `${o}:${c}` as Cell));
 
-export const cellOf = (p: Pick<Player, "origin" | "category">): Cell => `${p.origin}:${p.category}`;
+/** The (origin × category) cell of a player, or null when either attribute is unknown. */
+export const cellOf = (p: Pick<Player, "origin" | "category">): Cell | null => (p.origin && p.category ? `${p.origin}:${p.category}` : null);
 export const parseCell = (cell: Cell) => {
   const [origin, category] = cell.split(":") as [Origin, Category];
   return { origin, category };
 };
-export const cellLabel = (cell: Cell | "ANY") => {
+export const cellLabel = (cell: Cell | "ANY" | null) => {
   if (cell === "ANY") return "Any player";
+  if (cell === null) return "Unknown role";
   const { origin, category } = parseCell(cell);
   return `${origin === "indian" ? "Indian" : "Overseas"} ${CATEGORY_LABEL[category].toLowerCase()}`;
 };
@@ -48,6 +50,8 @@ export interface Alert {
 
 export interface RuleEvaluation {
   size: number;
+  /** players whose role/origin was not recorded: rule checks involving them are provisional */
+  unknownCount: number;
   cellCounts: Record<Cell, number>;
   statuses: ConstraintStatus[];
   /** Cells the team must still fill to meet every minimum (greedy minimal plan). */
@@ -69,17 +73,25 @@ const emptyCounts = () => Object.fromEntries(ALL_CELLS.map((c) => [c, 0])) as Re
 
 export function countCells(players: Pick<Player, "origin" | "category">[]) {
   const counts = emptyCounts();
-  for (const p of players) counts[cellOf(p)]++;
+  for (const p of players) {
+    const c = cellOf(p);
+    if (c) counts[c]++;
+  }
   return counts;
 }
 
 const sumFor = (c: Constraint, counts: Record<Cell, number>) =>
   ALL_CELLS.reduce((s, cell) => (constraintMatches(c, cell) ? s + counts[cell] : s), 0);
 
-/** Can one more player of `cell` be added without breaking a maximum? */
-export function cellAllowed(rules: RuleSet, counts: Record<Cell, number>, cell: Cell) {
-  const size = ALL_CELLS.reduce((s, c) => s + counts[c], 0);
-  if (size + 1 > rules.squad_max) return { ok: false, reason: `Squad is full (${rules.squad_max} players).` };
+/**
+ * Can one more player of `cell` be added without breaking a maximum?
+ * `size` defaults to the counted cells; pass the real squad size when some players have unknown roles.
+ * A null cell (unknown role) is only checked against squad size.
+ */
+export function cellAllowed(rules: RuleSet, counts: Record<Cell, number>, cell: Cell | null, size?: number) {
+  const n = size ?? ALL_CELLS.reduce((s, c) => s + counts[c], 0);
+  if (n + 1 > rules.squad_max) return { ok: false, reason: `Squad is full (${rules.squad_max} players).` };
+  if (cell === null) return { ok: true as const, reason: null };
   for (const c of rules.constraints) {
     if (c.max !== null && constraintMatches(c, cell) && sumFor(c, counts) + 1 > c.max) {
       return { ok: false, reason: `Would exceed "${c.label}" (max ${c.max}).` };
@@ -92,7 +104,7 @@ export function cellAllowed(rules: RuleSet, counts: Record<Cell, number>, cell: 
  * Greedy minimal fill plan: repeatedly add the cell that reduces the most
  * outstanding minimum requirements without breaking any maximum.
  */
-function planFill(rules: RuleSet, start: Record<Cell, number>) {
+function planFill(rules: RuleSet, start: Record<Cell, number>, unknown = 0) {
   const counts = { ...start };
   const plan: Cell[] = [];
   const guard = rules.squad_max + 50;
@@ -102,7 +114,7 @@ function planFill(rules: RuleSet, start: Record<Cell, number>) {
     let best: Cell | null = null;
     let bestScore = 0;
     for (const cell of ALL_CELLS) {
-      if (!cellAllowed(rules, counts, cell).ok) continue;
+      if (!cellAllowed(rules, counts, cell, ALL_CELLS.reduce((s, c) => s + counts[c], 0) + unknown).ok) continue;
       let score = 0;
       for (const d of deficits) if (constraintMatches(d, cell)) score += 1 + 1 / (1 + countCellsMatching(d));
       if (score > bestScore) {
@@ -135,7 +147,8 @@ export function evaluateRules(rules: RuleSet, players: Pick<Player, "origin" | "
     };
   });
 
-  const { plan, counts: after, feasible: planFeasible } = planFill(rules, counts);
+  const unknownCount = players.filter((p) => cellOf(p) === null).length;
+  const { plan, counts: after, feasible: planFeasible } = planFill(rules, counts, unknownCount);
   const afterSize = size + plan.length;
   const flexSlots = Math.max(0, rules.squad_min - afterSize);
   // make sure flex slots can actually be placed somewhere
@@ -143,7 +156,7 @@ export function evaluateRules(rules: RuleSet, players: Pick<Player, "origin" | "
   if (flexSlots > 0) {
     const tmp = { ...after };
     for (let i = 0; i < flexSlots; i++) {
-      const cell = ALL_CELLS.find((c) => cellAllowed(rules, tmp, c).ok);
+      const cell = ALL_CELLS.find((c) => cellAllowed(rules, tmp, c, ALL_CELLS.reduce((s, k) => s + tmp[k], 0) + unknownCount).ok);
       if (!cell) {
         flexFeasible = false;
         break;
@@ -190,6 +203,13 @@ export function evaluateRules(rules: RuleSet, players: Pick<Player, "origin" | "
     });
   }
   if (complete) alerts.push({ level: "info", kind: "valid", message: "Squad is complete and valid." });
+  if (unknownCount > 0 && rules.constraints.length > 0) {
+    alerts.push({
+      level: "info",
+      kind: "future",
+      message: `${unknownCount} player(s) have no recorded role/origin, so category rule checks are provisional.`,
+    });
+  }
   // potential future violation: a max that is exactly reached
   for (const s of statuses) {
     if (s.state === "satisfied" && s.room === 0 && s.constraint.max !== null) {
@@ -204,6 +224,7 @@ export function evaluateRules(rules: RuleSet, players: Pick<Player, "origin" | "
   const status: SquadStatus = hasViolation ? "violation" : !feasible ? "at_risk" : complete ? "valid" : "incomplete";
   return {
     size,
+    unknownCount,
     cellCounts: counts,
     statuses,
     mandatoryPlan: plan,

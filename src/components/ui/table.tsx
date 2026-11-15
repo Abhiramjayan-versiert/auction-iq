@@ -39,8 +39,10 @@ export function DataTable<T>({
     if (!col?.sort) return rows;
     const f = col.sort;
     return [...rows].sort((a, b) => {
-      const va = f(a);
-      const vb = f(b);
+      const fa = f(a);
+      const fb = f(b);
+      const va = typeof fa === "number" && Number.isNaN(fa) ? null : fa;
+      const vb = typeof fb === "number" && Number.isNaN(fb) ? null : fb;
       if (va === null || va === undefined) return 1;
       if (vb === null || vb === undefined) return -1;
       const r = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));

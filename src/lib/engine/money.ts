@@ -1,7 +1,7 @@
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export function fmtMoney(n: number | null | undefined, unit = "Cr") {
-  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  if (n === null || n === undefined || Number.isNaN(n) || !Number.isFinite(n)) return "—";
   const v = round2(n);
   const s = Number.isInteger(v) ? v.toString() : v.toFixed(2).replace(/0$/, "");
   return `₹${s} ${unit}`;
@@ -13,6 +13,7 @@ export function fmtRating(n: number | null | undefined) {
 }
 
 export function fmtPct(n: number | null | undefined, digits = 0) {
+  if (typeof n === "number" && Number.isNaN(n)) return "—";
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";
   return `${(n * 100).toFixed(digits)}%`;
 }

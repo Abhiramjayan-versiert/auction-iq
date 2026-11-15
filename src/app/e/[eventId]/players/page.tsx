@@ -16,7 +16,8 @@ import { downloadCsv } from "@/lib/utils";
 type View = "all" | "best_value" | "expensive" | "top" | "affordable" | "improve" | "fits";
 
 export default function PlayerExplorer() {
-  const { players, myTeamId, teamName, event } = useEventData();
+  const { players, myTeamId, teamName, event, teams } = useEventData();
+  const nationalities = [...new Set(players.map((p) => p.nationality).filter(Boolean) as string[])].sort();
   const { intel, shortlist } = useWorkspace();
   const m = useMoney();
   const [q, setQ] = useState("");
@@ -25,6 +26,8 @@ export default function PlayerExplorer() {
   const [status, setStatus] = useState("");
   const [minR, setMinR] = useState("");
   const [budget, setBudget] = useState("");
+  const [team, setTeam] = useState("");
+  const [nat, setNat] = useState("");
   const [view, setView] = useState<View>("all");
   const [sel, setSel] = useState<Player | null>(null);
   const me = myTeamId ? intel.byId[myTeamId] : undefined;
@@ -38,6 +41,8 @@ export default function PlayerExplorer() {
     if (status && p.auction_status !== status) return false;
     if (minR && (p.overall ?? 0) < Number(minR)) return false;
     if (budget && v.price > Number(budget)) return false;
+    if (team && p.sold_team_id !== team) return false;
+    if (nat && (p.nationality ?? "").toLowerCase() !== nat.toLowerCase()) return false;
     const avail = p.auction_status !== "sold" && p.auction_status !== "withdrawn";
     switch (view) {
       case "affordable": return avail && me ? v.price <= me.maxSingleBid : avail;
@@ -79,10 +84,12 @@ export default function PlayerExplorer() {
         { value: "affordable", label: "Affordable for me" }, { value: "improve", label: "Improves my average" }, { value: "fits", label: "Fits my requirements" },
       ]} />
       <Card>
-        <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-4 xl:grid-cols-8">
           <Input className="col-span-2" placeholder="Search name or nationality…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
           <Select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">All roles</option>{CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}</Select>
           <Select value={origin} onChange={(e) => setOrigin(e.target.value)}><option value="">Indian & overseas</option><option value="indian">Indian</option><option value="overseas">Overseas</option></Select>
+          <Select value={team} onChange={(e) => setTeam(e.target.value)}><option value="">Any team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+          <Select value={nat} onChange={(e) => setNat(e.target.value)}><option value="">Any nationality</option>{nationalities.map((n) => <option key={n} value={n}>{n}</option>)}</Select>
           <Select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any status</option>{["upcoming", "available", "sold", "unsold", "withdrawn"].map((s) => <option key={s}>{s}</option>)}</Select>
           <div className="flex gap-2"><Input type="number" step="0.1" placeholder="Min rating" value={minR} onChange={(e) => setMinR(e.target.value)} /><Input type="number" step="0.25" placeholder="Max price" value={budget} onChange={(e) => setBudget(e.target.value)} /></div>
         </div>

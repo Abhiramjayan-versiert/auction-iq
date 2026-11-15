@@ -26,12 +26,15 @@ export function AppShell({
   header,
   user,
   eventId,
+  bottomNav,
 }: {
   nav: NavGroup[];
   children: ReactNode;
   header?: ReactNode;
   user: { name: string; email: string; role: string };
   eventId?: string;
+  /** mobile bottom navigation (participant War Room) */
+  bottomNav?: NavItem[];
 }) {
   const path = usePathname();
   const router = useRouter();
@@ -92,8 +95,20 @@ export function AppShell({
           <div className="min-w-0 flex-1">{header}</div>
           <NotificationBell eventId={eventId} />
         </header>
-        <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+        <main className={cn("mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6", bottomNav && "pb-24 lg:pb-6")}>{children}</main>
       </div>
+      {bottomNav && (
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Primary">
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))` }}>
+            {bottomNav.map((i) => (
+              <Link key={i.href} href={i.href} className={cn("flex flex-col items-center gap-0.5 py-2 text-[10px]", isActive(i) ? "text-accent" : "text-muted")}>
+                <NavIcon name={i.icon} size={19} />
+                {i.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { cellAllowed, cellOf, fmtRating, simulate, type EventAnalysis } from "@/lib/engine";
+import { cellAllowed, cellOf, fmtRating, presetScenario, PRESET_LABEL, simulate, type EventAnalysis, type PresetKind } from "@/lib/engine";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { Badge, PageHeader, Tabs } from "@/components/ui/misc";
@@ -40,12 +40,20 @@ export default function Simulator() {
     if (!p) return toast.error("Choose a player");
     const tid = team || myTeamId;
     const cur = results[scen].byId[tid];
-    const ok = cellAllowed(results[scen].rules, cur.rules.cellCounts, cellOf(p));
+    const ok = cellAllowed(results[scen].rules, cur.rules.cellCounts, cellOf(p), cur.rules.size);
     if (!ok.ok) toast.warning(`Simulated anyway: ${ok.reason}`);
     await addSim({ scenario: scen, player_id: pid, team_id: tid, price: Number(price || p.base_price) });
     setPid(""); setPrice("");
   };
   const list = sims.filter((s) => s.scenario === scen);
+  const loadPreset = async (kind: PresetKind) => {
+    const pre = presetScenario(analysis, myTeamId, kind);
+    if (!pre.picks.length) return toast.info(pre.note);
+    if (list.length && !confirm(`Replace the ${list.length} purchase(s) in this scenario?`)) return;
+    await clearSims(scen);
+    for (const p of pre.picks) await addSim({ scenario: scen, player_id: p.player.id, team_id: myTeamId, price: p.price });
+    toast.success(`${PRESET_LABEL[kind]}: ${pre.picks.length} player(s). ${pre.note}`);
+  };
   const r = results[scen];
   const mine = r.byId[myTeamId];
   const rank = (a: EventAnalysis) => a.leaderboard.find((x) => x.teamId === myTeamId)?.officialRank;
@@ -61,6 +69,10 @@ export default function Simulator() {
           <CardHeader title="Build a scenario" action={<Button variant="ghost" size="sm" onClick={() => clearSims(scen)} disabled={!list.length}><RotateCcw size={13} /> Reset {scen}</Button>} />
           <CardBody>
             <Tabs value={scen} onChange={setScen} tabs={SCEN.map((s) => ({ value: s, label: `${names[s] ?? `Strategy ${s}`} (${sims.filter((x) => x.scenario === s).length})` }))} />
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="self-center text-xs text-faint">Auto-build:</span>
+              {(Object.keys(PRESET_LABEL) as PresetKind[]).map((k) => <Button key={k} type="button" size="sm" variant="outline" onClick={() => loadPreset(k)}>{PRESET_LABEL[k]}</Button>)}
+            </div>
             <form onSubmit={add} className="mt-3 grid gap-2 md:grid-cols-[1fr_110px_160px_auto]">
               <PlayerPicker value={pid} onChange={(id) => { setPid(id); setPrice(String(playerById[id]?.base_price ?? "")); }} filter={(p) => !list.some((s) => s.player_id === p.id)} />
               <Input type="number" step="0.05" min="0" placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />

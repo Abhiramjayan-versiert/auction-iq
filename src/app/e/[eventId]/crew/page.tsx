@@ -52,7 +52,7 @@ function Crew() {
           <ol className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
             <li className="rounded-md bg-surface-2 p-3"><b>1. Add players</b><p className="text-xs text-muted">{players.length} so far. Type them in or import your Excel sheet.</p><Link href={`/manage/${event!.id}/players`} className={buttonVariants({ size: "sm", className: "mt-2" })}>Add players</Link></li>
             <li className="rounded-md bg-surface-2 p-3"><b>2. Invite your crew</b><p className="text-xs text-muted">Share the crew code below. They join as analysts.</p><Button size="sm" className="mt-2" variant="secondary" onClick={share}>Share invite</Button></li>
-            <li className="rounded-md bg-surface-2 p-3"><b>3. Record results</b><p className="text-xs text-muted">During the auction, log each sale in seconds.</p><Link href={`/manage/${event!.id}/control-room`} className={buttonVariants({ size: "sm", variant: "secondary", className: "mt-2" })}>Open data entry</Link></li>
+            <li className="rounded-md bg-surface-2 p-3"><b>3. Record results</b><p className="text-xs text-muted">During the auction, log each sale in seconds.</p><Link href={`/manage/${event!.id}/entry`} className={buttonVariants({ size: "sm", variant: "secondary", className: "mt-2" })}>Open data entry</Link></li>
           </ol>
         </Card>
       )}

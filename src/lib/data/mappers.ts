@@ -34,7 +34,7 @@ export function toPlayer(p: PlayerRow): Player {
   };
 }
 
-export const toTeam = (t: TeamRow): Team => ({ ...t, initial_purse: Number(t.initial_purse) });
+export const toTeam = (t: TeamRow): Team => ({ ...t, initial_purse: t.initial_purse === null || t.initial_purse === undefined ? null : Number(t.initial_purse) });
 
 export const toTx = (t: TransactionRow): Transaction => ({
   id: t.id,

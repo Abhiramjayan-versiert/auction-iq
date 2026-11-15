@@ -17,7 +17,9 @@ export default function Alerts() {
   const { alertPrefs, setAlertPrefs } = useWorkspace();
   const [p, setP] = useState<AlertPrefs>(alertPrefs);
   const [history, setHistory] = useState<NotificationRow[]>([]);
-  useEffect(() => setP(alertPrefs), [alertPrefs]);
+  useEffect(() => {
+    setP(alertPrefs);
+  }, [alertPrefs]);
   const load = useCallback(async () => {
     const { data } = await supabaseBrowser().from("notifications").select("*").eq("event_id", event!.id).or(`user_id.eq.${userId},user_id.is.null`).order("created_at", { ascending: false }).limit(100);
     setHistory((data ?? []) as NotificationRow[]);

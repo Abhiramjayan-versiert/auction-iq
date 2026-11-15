@@ -47,6 +47,12 @@ do $$ declare p record; i int := 0; begin
 end $$;
 select set_current_player('e0000000-0000-0000-0000-000000000001', (select id from players where event_id = 'e0000000-0000-0000-0000-000000000001' and auction_status = 'upcoming' order by lot_number limit 1));
 reset role;
+\set operator '0000000a-0000-0000-0000-000000000001'
+\ir ../../supabase/dev/live-auction-test.sql
+reset role;
+-- the demo participant also watches the rehearsal from the Panthers (unknown purse) and Lions
+insert into event_members (event_id, user_id, role, status) values ('e0000000-0000-0000-0000-0000000000f8', '0000000a-0000-0000-0000-000000000002', 'participant', 'approved') on conflict do nothing;
+insert into team_members (team_id, user_id, event_id, role) select id, '0000000a-0000-0000-0000-000000000002', event_id, 'owner' from teams where event_id = 'e0000000-0000-0000-0000-0000000000f8' and short_name = 'LIO' on conflict do nothing;
 select invite_code as trk_code from events where id = (select id from trk) \gset
 select set_config('request.jwt.claim.sub', '0000000a-0000-0000-0000-000000000002', false);
 set role authenticated;

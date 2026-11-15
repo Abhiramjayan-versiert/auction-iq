@@ -23,6 +23,9 @@ interface Workspace {
   deleteNote: (id: string) => Promise<void>;
   upsertShortlist: (playerId: string, list: ShortlistRow["list"], patch?: Partial<ShortlistRow>) => Promise<void>;
   removeShortlist: (playerId: string) => Promise<void>;
+  watchByName: (name: string, patch?: Partial<ShortlistRow>) => Promise<void>;
+  updateShortlist: (id: string, patch: Partial<ShortlistRow>) => Promise<void>;
+  removeShortlistRow: (id: string) => Promise<void>;
   addSim: (s: Omit<SimRow, "id" | "user_id" | "event_id">) => Promise<void>;
   removeSim: (id: string) => Promise<void>;
   clearSims: (scenario: SimRow["scenario"]) => Promise<void>;
@@ -124,6 +127,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ),
       ),
     removeShortlist: (player_id) => guard(sb.from("player_shortlists").delete().eq("event_id", eventId!).eq("user_id", userId!).eq("player_id", player_id)),
+    watchByName: (name, patch = {}) => guard(sb.from("player_shortlists").insert({ event_id: eventId, user_id: userId, player_id: null, player_name: name.trim(), list: "target", ...patch })),
+    updateShortlist: (id, patch) => guard(sb.from("player_shortlists").update(patch).eq("id", id)),
+    removeShortlistRow: (id) => guard(sb.from("player_shortlists").delete().eq("id", id)),
     addSim: (s) =>
       guard(sb.from("simulated_transactions").upsert({ ...s, event_id: eventId, user_id: userId }, { onConflict: "user_id,event_id,scenario,player_id" })),
     removeSim: (id) => guard(sb.from("simulated_transactions").delete().eq("id", id)),

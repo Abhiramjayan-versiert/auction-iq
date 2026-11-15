@@ -48,7 +48,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {rows.map(({ role, status, events: e }) => {
             const tracker = e.mode === "tracker";
-            const href = role === "auctioneer" ? `/manage/${e.id}` : status === "approved" ? (teamByEvent.get(e.id) || tracker ? `/e/${e.id}` : `/e/${e.id}/select-team`) : "#";
+            const href = role === "auctioneer" ? `/manage/${e.id}` : role === "data_entry" && !tracker ? `/manage/${e.id}/entry` : status === "approved" ? (teamByEvent.get(e.id) || tracker ? `/e/${e.id}` : `/e/${e.id}/select-team`) : "#";
             const roleLabel = role === "data_entry" ? "data entry" : role;
             return (
               <Card key={e.id} className="p-4">
@@ -67,7 +67,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 </div>
                 {status === "approved" ? (
                   <Link href={href} className={buttonVariants({ variant: "secondary", size: "sm", className: "mt-4 w-full" })}>
-                    {role === "auctioneer" ? "Open control panel" : teamByEvent.get(e.id) || tracker ? "Open workspace" : "Select your team"} <ArrowRight size={14} />
+                    {role === "auctioneer" ? "Open control panel" : role === "data_entry" && !tracker ? "Open live data entry" : teamByEvent.get(e.id) || tracker ? "Open workspace" : "Select your team"} <ArrowRight size={14} />
                   </Link>
                 ) : (
                   <p className="mt-4 text-xs text-muted">{status === "pending" ? "Waiting for organiser approval." : "Access not available."}</p>

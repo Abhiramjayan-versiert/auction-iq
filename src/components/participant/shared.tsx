@@ -6,6 +6,7 @@ import {
   CATEGORY_LABEL,
   ORIGINS,
   cellLabel,
+  cellOf,
   fmtMoney,
   fmtRating,
   smartBid,
@@ -46,7 +47,7 @@ export function RosterTable({ team, onPlayer }: { team: TeamAnalysis; onPlayer?:
   const m = useMoney();
   const cols: Column<RosterEntry>[] = [
     { key: "name", header: "Player", cell: (e) => <PlayerName p={e.player} />, sort: (e) => e.player.name },
-    { key: "cat", header: "Role", cell: (e) => <CategoryBadge category={e.player.category} origin={e.player.origin} />, sort: (e) => e.player.category + e.player.origin },
+    { key: "cat", header: "Role", cell: (e) => <CategoryBadge category={e.player.category} origin={e.player.origin} />, sort: (e) => `${e.player.category ?? "~"}${e.player.origin ?? ""}` },
     { key: "ovr", header: "Rating", align: "right", cell: (e) => <b>{fmtRating(e.player.overall)}</b>, sort: (e) => e.player.overall },
     { key: "bat", header: "Bat", align: "right", cell: (e) => fmtRating(e.player.batting), sort: (e) => e.player.batting ?? null },
     { key: "bowl", header: "Bowl", align: "right", cell: (e) => fmtRating(e.player.bowling), sort: (e) => e.player.bowling ?? null },
@@ -189,8 +190,19 @@ export function SmartBidPanel({ player, compact, analysis }: { player: Player | 
         tabs={(Object.keys(STRATEGY_PARAMS) as Strategy[]).map((s) => ({ value: s, label: STRATEGY_PARAMS[s].label }))}
       />
       <div className={cn("mt-3 rounded-lg border p-3", res.eligible ? "border-accent/40 bg-accent/5" : "border-danger/40 bg-danger/5")}>
-        <div className="text-[11px] uppercase tracking-wide text-faint">Maximum recommended bid</div>
-        <div className={cn("tabular text-3xl font-semibold", res.eligible ? "text-accent" : "text-danger")}>{res.eligible ? m(res.maxBid) : "Do not bid"}</div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-faint">Suggested bid ({STRATEGY_PARAMS[strategy].label.toLowerCase()})</div>
+            <div className={cn("tabular text-3xl font-semibold", res.eligible ? "text-accent" : "text-danger")}>{res.eligible ? m(res.maxBid) : "Do not bid"}</div>
+          </div>
+          {res.eligible && (
+            <div className="text-right">
+              <div className="text-[11px] uppercase tracking-wide text-faint">Maximum safe bid</div>
+              <div className="tabular text-lg font-semibold">{m(res.maxSafeBid)}</div>
+            </div>
+          )}
+          {res.eligible && <Badge tone={res.risk === "low" ? "ok" : res.risk === "medium" ? "warn" : "danger"}>Financial risk: {res.risk}</Badge>}
+        </div>
         {res.blockedReason && <div className="text-xs text-danger">{res.blockedReason}</div>}
         {res.winnable !== null && res.eligible && (
           <div className="mt-1 text-xs text-muted">
@@ -211,13 +223,19 @@ export function SmartBidPanel({ player, compact, analysis }: { player: Player | 
         </div>
         <div>
           {row("Remaining purse", m(res.remainingPurse))}
-          {row("Minimum reserve (floor)", m(res.minimumReserve))}
+          {row("Purse after (at suggested bid)", m(res.purseAfter))}
+          {row("Mandatory reserve after", m(res.minimumReserve))}
           {row(`${STRATEGY_PARAMS[strategy].label} reserve`, m(res.strategyReserve))}
           {row("Discretionary budget", m(res.discretionary), res.discretionary < 0 ? "text-danger" : "")}
           {row("Requirements left after", `${res.remainingRequirementsAfter} player(s)`)}
           {row("Expected value", res.expectedValue === null ? "—" : `${res.expectedValue.toFixed(2)} rating / ${rules.currency}`)}
         </div>
       </div>
+      )}
+      {res.limitations.length > 0 && (
+        <ul className="mt-2 space-y-0.5 rounded-md border border-warn/30 bg-warn/5 p-2 text-[11px] text-warn">
+          {res.limitations.map((l) => <li key={l}>⚠ {l}</li>)}
+        </ul>
       )}
       {!compact && (
         <>
@@ -248,7 +266,7 @@ export function PlayerPicker({ value, onChange, filter }: { value: string; onCha
     <Select value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">Select a player…</option>
       {list.map((p) => (
-        <option key={p.id} value={p.id}>{p.name} · {cellLabel(`${p.origin}:${p.category}`)} · {fmtRating(p.overall)} · base {p.base_price}</option>
+        <option key={p.id} value={p.id}>{p.name} · {cellLabel(cellOf(p))} · {fmtRating(p.overall)} · base {p.base_price}</option>
       ))}
     </Select>
   );

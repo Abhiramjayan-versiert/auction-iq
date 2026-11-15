@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select, Switch, Textarea } from "@/components/ui/form";
@@ -79,6 +79,23 @@ function EventDialog({ ev, orgs, auctioneers, assigned, onClose }: { ev: Partial
   const [f, setF] = useState<Partial<EventRow>>({ ...ev, starts_at: ev.starts_at ? ev.starts_at.slice(0, 16) : "" });
   const [newOrg, setNewOrg] = useState("");
   const [auc, setAuc] = useState<string[]>(assigned);
+  const [opEmail, setOpEmail] = useState("");
+  const [ops, setOps] = useState<{ user_id: string; name: string; email: string }[]>([]);
+  useEffect(() => {
+    if (!ev.id) return;
+    void sb.from("event_members").select("user_id, profiles(full_name, email)").eq("event_id", ev.id).eq("role", "data_entry").eq("status", "approved").then(({ data }) =>
+      setOps(((data ?? []) as unknown as { user_id: string; profiles: { full_name: string; email: string } | null }[]).map((r) => ({ user_id: r.user_id, name: r.profiles?.full_name ?? "", email: r.profiles?.email ?? "" }))),
+    );
+  }, [ev.id, sb]);
+  const addOperator = async () => {
+    const { data: u } = await sb.from("profiles").select("id").ilike("email", opEmail.trim()).maybeSingle();
+    if (!u) return toast.error("No registered user with that email. Ask them to sign up first.");
+    const { error } = await sb.rpc("add_event_operator", { p_event: ev.id, p_user: u.id });
+    if (error) return toast.error(error.message);
+    toast.success("Data-entry operator assigned");
+    setOpEmail("");
+    setOps([...ops, { user_id: u.id, name: "", email: opEmail.trim() }]);
+  };
   const perms = f.participant_permissions ?? { view_competitors: true, view_official_purses: true, view_leaderboard: true };
   const save = async () => {
     if (!f.name?.trim()) return toast.error("Name required");
@@ -141,7 +158,25 @@ function EventDialog({ ev, orgs, auctioneers, assigned, onClose }: { ev: Partial
           </div>
         </Field>
       </div>
-      <p className="mt-2 text-[11px] text-faint">Rules, purse limits and rating weights are configured under Manage → Auction rules after creating the event.</p>
+      {ev.id ? (
+        <div className="mt-3 rounded-lg border border-line/60 p-3">
+          <div className="text-xs font-medium">Data-entry operators</div>
+          <p className="text-[11px] text-faint">Operators type every sale live on the Live Data Entry screen. Any registered user can be an operator; they get access to this event only.</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {ops.map((o) => (
+              <span key={o.user_id} className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs">
+                {o.name || o.email}
+                <button type="button" className="text-faint hover:text-danger cursor-pointer" onClick={async () => { const { error } = await sb.rpc("remove_event_operator", { p_event: ev.id, p_user: o.user_id }); if (error) toast.error(error.message); else setOps(ops.filter((x) => x.user_id !== o.user_id)); }}>×</button>
+              </span>
+            ))}
+            {!ops.length && <span className="text-xs text-muted">None yet.</span>}
+          </div>
+          <div className="mt-2 flex gap-2"><Input placeholder="operator@email.com" value={opEmail} onChange={(e) => setOpEmail(e.target.value)} /><Button type="button" variant="secondary" onClick={addOperator} disabled={!opEmail.trim()}>Assign</Button></div>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-faint">Save the event first, then reopen it to assign data-entry operators.</p>
+      )}
+      <p className="mt-2 text-[11px] text-faint">Squad rules, rating scale, ranking formula and minimum price per player are under Manage → Auction rules. Nothing about players needs to be uploaded before the auction.</p>
       <div className="mt-4 flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save}>{ev.id ? "Save" : "Create event"}</Button></div>
     </Dialog>
   );

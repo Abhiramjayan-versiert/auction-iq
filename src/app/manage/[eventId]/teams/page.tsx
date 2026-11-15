@@ -23,7 +23,7 @@ export default function Teams() {
   const m = (n: number) => fmtMoney(n, rules.currency);
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await sb.from("teams").insert({ event_id: event!.id, name: f.name.trim(), short_name: f.short_name.trim() || null, initial_purse: Number(f.initial_purse), color: f.color, logo_url: f.logo_url || null });
+    const { error } = await sb.from("teams").insert({ event_id: event!.id, name: f.name.trim(), short_name: f.short_name.trim() || null, initial_purse: f.initial_purse.trim() === "" ? null : Number(f.initial_purse), color: f.color, logo_url: f.logo_url || null });
     if (error) return toast.error(error.message);
     setF({ ...f, name: "", short_name: "", logo_url: "", color: COLORS[(teamRows.length + 1) % COLORS.length] });
     await reload();
@@ -33,7 +33,7 @@ export default function Teams() {
     if (!names.length) return;
     const rows = names.map((line, i) => {
       const [name, short, purse] = line.split(/[,\t]/).map((s) => s.trim());
-      return { event_id: event!.id, name, short_name: short || null, initial_purse: Number(purse || event!.default_purse), color: COLORS[(teamRows.length + i) % COLORS.length] };
+      return { event_id: event!.id, name, short_name: short || null, initial_purse: purse === "?" ? null : Number(purse || event!.default_purse), color: COLORS[(teamRows.length + i) % COLORS.length] };
     });
     const { error } = await sb.from("teams").insert(rows);
     if (error) return toast.error(error.message);
@@ -50,7 +50,7 @@ export default function Teams() {
   };
   const saveEdit = async () => {
     if (!edit) return;
-    const { error } = await sb.from("teams").update({ name: edit.name, short_name: edit.short_name, initial_purse: Number(edit.initial_purse), color: edit.color, logo_url: edit.logo_url }).eq("id", edit.id);
+    const { error } = await sb.from("teams").update({ name: edit.name, short_name: edit.short_name, initial_purse: edit.initial_purse === null || String(edit.initial_purse) === "" ? null : Number(edit.initial_purse), color: edit.color, logo_url: edit.logo_url }).eq("id", edit.id);
     if (error) return toast.error(error.message);
     toast.success("Team updated — purse recalculated from transactions");
     setEdit(null);
@@ -69,7 +69,7 @@ export default function Teams() {
                 {teamRows.map((t) => (
                   <tr key={t.id} className="border-t border-line/40">
                     <td className="py-1.5"><TeamChip team={t} /> <span className="text-xs text-faint">{t.name !== t.short_name ? t.name : ""}</span></td>
-                    <td className="text-right">{m(Number(t.initial_purse))}</td>
+                    <td className="text-right">{t.initial_purse === null ? <span className="text-warn">not set</span> : m(Number(t.initial_purse))}</td>
                     <td className="text-right">{m(analysis.byId[t.id]?.remaining ?? 0)}</td>
                     <td className="text-right">{analysis.byId[t.id]?.rating.count ?? 0}</td>
                     <td className="text-xs">{teamMembers.some((x) => x.team_id === t.id && x.role === "owner") ? "assigned" : <span className="text-faint">open</span>}</td>
@@ -91,7 +91,7 @@ export default function Teams() {
               <form onSubmit={add} className="grid grid-cols-2 gap-2">
                 <Field label="Name" className="col-span-2"><Input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Chennai Super Kings" /></Field>
                 <Field label="Short name"><Input value={f.short_name} onChange={(e) => setF({ ...f, short_name: e.target.value })} placeholder="CSK" /></Field>
-                <Field label={`Purse (${rules.currency})`}><Input type="number" step="0.5" required value={f.initial_purse} onChange={(e) => setF({ ...f, initial_purse: e.target.value })} /></Field>
+                <Field label={`Purse (${rules.currency})`} hint="Leave empty if not known yet"><Input type="number" step="0.5" value={f.initial_purse} onChange={(e) => setF({ ...f, initial_purse: e.target.value })} /></Field>
                 <Field label="Colour"><Input type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} className="p-1" /></Field>
                 <Field label="Logo URL"><Input value={f.logo_url} onChange={(e) => setF({ ...f, logo_url: e.target.value })} placeholder="https://…" /></Field>
                 <Button className="col-span-2">Add team</Button>
@@ -99,7 +99,7 @@ export default function Teams() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title="Bulk add" description="One per line: name, short name, purse" />
+            <CardHeader title="Bulk add" description="One per line: name, short name, purse (use ? if unknown)" />
             <CardBody className="space-y-2">
               <Textarea value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={"Mumbai Indians, MI, 100\nRoyal Challengers, RCB"} className="min-h-28 font-mono text-xs" />
               <Button variant="secondary" className="w-full" onClick={addBulk}>Add all</Button>
@@ -112,7 +112,7 @@ export default function Teams() {
           <div className="grid grid-cols-2 gap-2">
             <Field label="Name" className="col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             <Field label="Short name"><Input value={edit.short_name ?? ""} onChange={(e) => setEdit({ ...edit, short_name: e.target.value })} /></Field>
-            <Field label="Initial purse"><Input type="number" step="0.5" value={edit.initial_purse} onChange={(e) => setEdit({ ...edit, initial_purse: Number(e.target.value) })} /></Field>
+            <Field label="Initial purse"><Input type="number" step="0.5" value={edit.initial_purse ?? ""} onChange={(e) => setEdit({ ...edit, initial_purse: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
             <Field label="Colour"><Input type="color" value={edit.color ?? "#a3e635"} onChange={(e) => setEdit({ ...edit, color: e.target.value })} className="p-1" /></Field>
             <Field label="Logo URL"><Input value={edit.logo_url ?? ""} onChange={(e) => setEdit({ ...edit, logo_url: e.target.value })} /></Field>
             <div className="col-span-2 flex justify-end gap-2"><Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={saveEdit}>Save</Button></div>

@@ -10,8 +10,9 @@ export function ManageShell({ eventId, user, isAdmin, children }: { eventId: str
   const nav: NavGroup[] = [
     {
       items: [
+        { href: `${b}/entry`, label: "Live data entry", icon: "list" },
         { href: b, label: "Event overview", icon: "dashboard", exact: true },
-        { href: `${b}/control-room`, label: "Auction control room", icon: "gavel" },
+        { href: `${b}/control-room`, label: "Lot-by-lot control room", icon: "gavel" },
         { href: `${b}/transactions`, label: "Transactions & logs", icon: "transactions" },
       ],
     },
@@ -36,13 +37,18 @@ export function ManageShell({ eventId, user, isAdmin, children }: { eventId: str
 
 /** Trackers get a slimmer data-entry menu that links back to the crew's analytics. */
 function NavSwitch({ nav, eventId, user, children }: { nav: NavGroup[]; eventId: string; user: { name: string; email: string; role: string }; children: ReactNode }) {
-  const { isTracker } = useEventData();
+  const { isTracker, myRole } = useEventData();
   const b = `/manage/${eventId}`;
+  // official-event operators: data entry + read-only views (rules belong to the auctioneer/Super Admin)
+  const operatorNav: NavGroup[] = [
+    { title: "Data entry", items: [{ href: `${b}/entry`, label: "Live data entry", icon: "list" }, { href: `${b}/transactions`, label: "Entry history & log", icon: "transactions" }, { href: `${b}/teams`, label: "Teams & purses", icon: "team" }, { href: `${b}/reports`, label: "Reports & export", icon: "reports" }] },
+    { items: [{ href: "/dashboard", label: "All my auctions", icon: "events" }] },
+  ];
   const trackerNav: NavGroup[] = [
     {
       title: "Data entry",
       items: [
-        { href: `${b}/control-room`, label: "Record results", icon: "gavel" },
+        { href: `${b}/entry`, label: "Live data entry", icon: "list" },
         { href: `${b}/players`, label: "Players", icon: "players" },
         { href: `${b}/teams`, label: "Teams", icon: "team" },
         { href: `${b}/rules`, label: "Rules", icon: "rules" },
@@ -53,17 +59,18 @@ function NavSwitch({ nav, eventId, user, children }: { nav: NavGroup[]; eventId:
     { items: [{ href: "/dashboard", label: "All my auctions", icon: "events" }] },
   ];
   return (
-    <AppShell nav={isTracker ? trackerNav : nav} user={user} eventId={eventId} header={<Header />}>
+    <AppShell nav={isTracker ? trackerNav : myRole === "data_entry" ? operatorNav : nav} user={user} eventId={eventId} header={<Header />}>
       <Gate>{children}</Gate>
     </AppShell>
   );
 }
 
 function Header() {
-  const { event, session, connected, isTracker } = useEventData();
+  const { event, session, connected, isTracker, myRole } = useEventData();
+  const canManageAsAuctioneer = myRole !== "data_entry";
   return (
     <div className="flex items-center gap-3 min-w-0">
-      <Badge tone="info">{isTracker ? "Data entry" : "Auctioneer"}</Badge>
+      <Badge tone="info">{isTracker || !canManageAsAuctioneer ? "Data entry" : "Auctioneer"}</Badge>
       <span className="truncate text-sm font-semibold">{event?.name ?? "…"}</span>
       {session && <Badge tone={session.status === "live" ? "accent" : session.status === "paused" ? "warn" : "neutral"}>{session.status.replace("_", " ")}</Badge>}
       <span className={`hidden sm:inline-flex items-center gap-1 text-[11px] ${connected ? "text-ok" : "text-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-warn animate-pulse"}`} />{connected ? "Realtime" : "Reconnecting"}</span>

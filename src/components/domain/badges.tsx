@@ -8,10 +8,10 @@ const srcTone: Record<DataSource, Tone> = { official: "accent", participant: "in
 const srcLabel: Record<DataSource, string> = { official: "Official", participant: "Participant-entered", estimated: "Estimated", unverified: "Unverified" };
 export const SourceBadge = ({ source }: { source: DataSource }) => <Badge tone={srcTone[source]}>{srcLabel[source]}</Badge>;
 
-export const CategoryBadge = ({ category, origin }: { category: Category; origin?: Origin }) => (
+export const CategoryBadge = ({ category, origin }: { category: Category | null; origin?: Origin | null }) => (
   <Badge tone="neutral">
     {origin && <span className={origin === "overseas" ? "text-info" : "text-accent"}>{origin === "overseas" ? "OS" : "IN"}</span>}
-    {CATEGORY_LABEL[category]}
+    {category ? CATEGORY_LABEL[category] : <span className="text-faint">role not recorded</span>}
   </Badge>
 );
 

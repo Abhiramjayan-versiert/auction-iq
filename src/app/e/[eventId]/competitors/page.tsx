@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { classifyTeams, FLAG_LABEL, fmtPct, fmtRating, predictCompetitor, type CompetitorFlag, type TeamAnalysis, cellLabel } from "@/lib/engine";
+import { AGGRESSION_CAVEAT, AGGRESSION_LABEL, aggressionIndex, classifyTeams, competitorDNA, FLAG_LABEL, fmtPct, fmtRating, predictCompetitor, type CompetitorFlag, type TeamAnalysis, cellLabel } from "@/lib/engine";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { Badge, Dialog, PageHeader } from "@/components/ui/misc";
@@ -21,6 +21,7 @@ export default function Competitors() {
   const m = useMoney();
   const flags = useMemo(() => classifyTeams(intel), [intel]);
   const rank = useMemo(() => Object.fromEntries(intel.leaderboard.map((r) => [r.teamId, r])), [intel]);
+  const agg = useMemo(() => Object.fromEntries(aggressionIndex(intel).map((x) => [x.teamId, x])), [intel]);
   const [q, setQ] = useState("");
   const [flag, setFlag] = useState<CompetitorFlag | "">("");
   const [picked, setPicked] = useState<string[]>([]);
@@ -36,7 +37,7 @@ export default function Competitors() {
     { key: "rem", header: "Remaining", align: "right", cell: (t) => <b className={cn(!t.purseSufficient && "text-danger")}>{m(t.remaining)}</b>, sort: (t) => t.remaining },
     { key: "util", header: "Used", align: "right", cell: (t) => fmtPct(t.utilization), sort: (t) => t.utilization },
     { key: "cap", header: "Max bid", align: "right", cell: (t) => m(t.maxSingleBid), sort: (t) => t.maxSingleBid },
-    { key: "avg", header: "Avg", align: "right", cell: (t) => <b>{fmtRating(t.rating.average)}</b>, sort: (t) => t.rating.average },
+    { key: "avg", header: "Avg", align: "right", cell: (t) => <span><b>{fmtRating(t.rating.average)}</b>{t.rating.ratedCount < t.rating.count && <span className="ml-1 text-[10px] text-faint">{t.rating.ratedCount}/{t.rating.count}</span>}</span>, sort: (t) => t.rating.average },
     { key: "tot", header: "Total", align: "right", cell: (t) => fmtRating(t.rating.total), sort: (t) => t.rating.total },
     { key: "proj", header: "Projected", align: "right", cell: (t) => fmtRating(t.projectedAverage), sort: (t) => t.projectedAverage },
     { key: "slots", header: "Needs", align: "right", cell: (t) => t.rules.slotsRequired, sort: (t) => t.rules.slotsRequired },
@@ -44,6 +45,7 @@ export default function Competitors() {
     { key: "bat", header: "Bat", align: "right", cell: (t) => fmtRating(t.rating.batting), sort: (t) => t.rating.batting },
     { key: "bowl", header: "Bowl", align: "right", cell: (t) => fmtRating(t.rating.bowling), sort: (t) => t.rating.bowling },
     { key: "bal", header: "Balance", align: "right", cell: (t) => t.rating.balance.toFixed(0), sort: (t) => t.rating.balance },
+    { key: "agg", header: "Style", cell: (t) => (agg[t.team.id]?.cls ? <Badge tone={agg[t.team.id].cls === "highly_aggressive" ? "danger" : agg[t.team.id].cls === "aggressive" ? "warn" : "neutral"}>{AGGRESSION_LABEL[agg[t.team.id].cls!]}</Badge> : <span className="text-faint">—</span>), sort: (t) => agg[t.team.id]?.index ?? null },
     { key: "status", header: "Rules", cell: (t) => <SquadStatusBadge status={t.rules.status} />, sort: (t) => t.rules.status },
   ];
   return (
@@ -89,6 +91,7 @@ function TeamDetail({ t, onClose, flags }: { t: TeamAnalysis; onClose: () => voi
   const { intel } = useWorkspace();
   const m = useMoney();
   const pred = predictCompetitor(intel, t);
+  const dna = competitorDNA(intel, t.team.id);
   return (
     <Dialog open onClose={onClose} title={<TeamChip team={t.team} />} wide>
       <div className="flex flex-wrap gap-1">{flags.map((f) => <Badge key={f}>{FLAG_LABEL[f]}</Badge>)}<Badge tone={pred.pressure === "critical" || pred.pressure === "high" ? "danger" : pred.pressure === "medium" ? "warn" : "ok"}>Spending pressure: {pred.pressure}</Badge><Badge>{pred.spendingStyle}</Badge></div>
@@ -115,6 +118,17 @@ function TeamDetail({ t, onClose, flags }: { t: TeamAnalysis; onClose: () => voi
           </ul>
           <div className="mt-3"><RuleAlerts alerts={t.rules.alerts} compact hideInfo /></div>
         </div>
+      </div>
+      <div className="mt-4 rounded-lg border border-line/60 p-3">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Competitor DNA</div>
+        <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <div><div className="text-faint">Spending behaviour</div><div className="font-medium">{dna.aggression.cls ? `${AGGRESSION_LABEL[dna.aggression.cls]} (${dna.aggression.index}× going rate)` : "Not enough purchases"}</div><div className="text-[10px] text-faint">{dna.aggression.basis}</div></div>
+          <div><div className="text-faint">Average purchase · premium share</div><div className="font-medium">{m(dna.avgPrice)} · {dna.premiumShare === null ? "—" : fmtPct(dna.premiumShare)}</div><div className="text-[10px] text-faint">premium = top-quartile prices</div></div>
+          <div><div className="text-faint">Category preferences</div><div className="font-medium">{dna.categoryPreferences.slice(0, 3).map((c) => `${c.category} ×${c.n}`).join(", ") || "—"}</div></div>
+          <div><div className="text-faint">Flexibility</div><div className="font-medium">{dna.flexibility.purseKnown ? `${m(dna.flexibility.remaining)} left · max bid ~${m(dna.flexibility.maxSingleBid)}` : "purse not set"}</div><div className="text-[10px] text-faint">min to complete {m(dna.flexibility.minCompletion)}</div></div>
+        </div>
+        {dna.weaknesses.length > 0 && <div className="mt-2 text-xs"><span className="text-faint">Weaknesses: </span>{dna.weaknesses.join(" · ")}</div>}
+        <p className="mt-2 text-[10px] text-faint">{AGGRESSION_CAVEAT}</p>
       </div>
       <div className="mt-4"><RosterTable team={t} /></div>
       <div className="mt-3 text-right"><Button variant="ghost" size="sm" onClick={onClose}>Close</Button></div>

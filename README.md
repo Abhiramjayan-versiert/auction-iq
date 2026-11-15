@@ -39,6 +39,73 @@ Highlights:
 - **Live updates.** Supabase Realtime pushes official changes. Every client recomputes analytics from the authoritative transactions and resyncs after a reconnect.
 - **Private workspace.** Notes, shortlists (target / backup / avoid with priority), simulations (scenarios A/B/C), competitor observations (Participant-entered / Estimated / Unverified) and alert preferences. Only the owner can see them.
 
+## Live auction data entry (no pre-loaded player database)
+
+The platform is built around a **data-entry operator** who types each result as it happens in the room. Nothing about players has to be uploaded beforehand: a new event starts with an empty player database, and a player is created the first time the operator types their name.
+
+**Operator screen** (`/manage/[eventId]/entry`):
+
+- **Quick-entry row.** Four essentials: **Player name → Rating → Winning team → Sold price → Enter**.
+  - The team picker is searchable: type "mi" or "mum".
+  - Optional fields (category, IN/OS, nationality, base price) are behind one toggle.
+  - There is a Sold/Unsold switch.
+  - After saving, the fields clear and focus returns to the name box.
+- **Spreadsheet grid.**
+  - Columns: No., Player, Rating, Category, IN/OS, Nationality, Base, Winning team, Sold price, Status, Time.
+  - Header: sticky. Columns sort by clicking the header. You can search and filter by team or status.
+  - Arrow keys move between cells; **Enter** or a double-click edits a cell.
+  - "Copy rows" copies the grid as TSV for Excel.
+- **Bulk paste.** Paste rows from Excel or Google Sheets (`Player | Rating | Team | Price …`, with or without headers) straight into the name box. Invalid rows are highlighted and editable before saving.
+- **Keyboard.** **Ctrl/⌘+Z** undoes the last official entry (with confirmation); **/** jumps back to the name box.
+- **Duplicate protection.**
+  - Names are matched case- and space-insensitively.
+  - Already-sold players are blocked, and near-duplicate names are flagged.
+  - Re-entering an unsold player reuses the same record.
+- **Never loses an entry.**
+  - Every submission carries an idempotency key (`client_ref`) and is persisted locally until the server confirms it.
+  - Entries are retried automatically after a network drop, and the connection status and queue are visible.
+  - A retried request can never record the same sale twice.
+- **Corrections.**
+  - Editing team, price or status voids the original row and records a corrected one; both stay in history and in the audit log.
+  - Editing name or rating updates the player and recalculates the team score.
+  - "Reverse" voids an entry (it is kept as history).
+- **Summary.** Players entered, sold, unsold, teams, total spending, last entry, event status and connection status. A team purse table sits below the grid; click a purse to set it if it wasn't known at setup.
+
+**Server:** `record_live_entry` performs find-or-create player plus a sale or unsold, atomically, with row locks. A unique index on `(event, normalised name)` and the one-active-outcome-per-player index make concurrent or duplicate entries safe: 12 simultaneous entries of the same new player produce 1 player and 1 sale. `update_live_entry` handles corrections.
+
+**Incomplete data is first-class.**
+- Category, origin, rating, base price and even a team's initial purse may be missing.
+- Averages use only rated players and always show how many were rated.
+- Category rules and insights only run where role data exists.
+- Teams without a purse are shown as "not set" instead of using invented numbers.
+- Nothing is ever guessed.
+
+**Participant War Room** (mobile-first, with bottom navigation: War Room · My Team · Competitors · Insights · Profile):
+- Purse, safe-to-spend amount, rated average, rank and projected rank.
+- A "consider next" action, your biggest competitor and your biggest weakness.
+- The live feed and competitor overview.
+
+Intelligence features:
+- **Smart Bid for the player on the block.** Type the rating, since players are often entered only after they're sold. It returns a suggested bid, maximum safe bid, purse after, mandatory reserve, financial risk and any data limitations.
+- **Auction Co-Pilot** (`/copilot`). Natural-language questions answered by the deterministic engine, with reasoning, confidence and limitations. No AI service required.
+- **Strategy lab** (`/lab`):
+  - A seeded Monte Carlo simulator (up to 5,000 runs) with P(1st), P(valid squad), rank distribution and listed assumptions.
+  - Leader Hunter, using the official formula.
+  - Minimum squad-completion cost, found by constrained search over distinct players rather than cheapest price × slots.
+  - Rating-improvement optimiser (best single player and best pair) and purchase-regret simulator.
+- **Insights hub** (`/insights`). Team weakness scanner, competitor financial intelligence, opponent aggression index (labelled as limited because only winning prices are known), scarcity (only when enough role data exists) and Leader Hunter.
+- **Competitor DNA** in each competitor's detail view: spending style, average purchase, premium-player spending share, category preferences, flexibility, weaknesses and likely priorities.
+- **Shadow auction** (`/shadow`). A private alternative squad from the event's player pool, compared with your real team, plus missed opportunities.
+- **Analytics** (`/analytics`). Rating comparison, purse use, price vs rating, spending trend, value for money, category distribution and squad validity.
+- **Shortlist.** Watch players by name before they're entered, with target price, private rating and high priority. You're alerted when a watched player is entered or sold.
+- **What-if simulator presets.** Best, Conservative, Strongest batting, Strongest bowling, Balanced.
+
+**Setup is minimal.**
+- A Super Admin creates the event, adds teams (the purse may be left empty) and optionally loads a rule template.
+- Under Admin → Events → Edit → Data-entry operators, the admin assigns any registered user as **data-entry operator**. Operators can record and correct results for that event only; they cannot change rules.
+
+**Rehearsal data (development only).** `supabase/dev/live-auction-test.sql` creates a fictional 8-team event with different purses (one unknown) and 12 live entries with mixed missing information. It enters them through the same RPC the operator screen uses.
+
 ## Trackers & crews (auctions run outside the app)
 
 Any signed-in user can create a **tracker** (`/trackers/new`) for an auction that is conducted somewhere else: in a college hall, or tracked in Excel today.
@@ -93,6 +160,7 @@ Next.js server
 | `…_functions.sql` | authorization helpers, triggers, and the atomic RPCs: `record_sale`, `mark_unsold`, `undo_last_transaction`, `void_transaction`, `correct_sale`, `set_session_status`, `set_current_player`, `publish_bid`, `publish_announcement`, `join_event`, `claim_team`, `assign_team`, `set_member_status`, `save_event_rules`, `import_library_players`, `admin_set_user`, `admin_platform_stats` |
 | `…_rls.sql` | Row Level Security on every table + Realtime publication |
 | `…_reference_data.sql` | categories, role permissions, platform defaults, two rule templates (no player data) |
+| `…_live_entry.sql` | optional category/origin/purse, `players.name_key` unique per event, `client_ref` idempotency, by-name shortlist fields, `record_live_entry`, `update_live_entry`, `add/remove_event_operator`, data-entry operators on official events, tightened `can_edit_rules` |
 | `…_trackers_and_crews.sql` | tracker mode (`events.mode`, owner, own team), crew roles `data_entry` / `analyst`, `create_tracker`, `get_crew`, `set_crew_role`, `remove_crew_member`, `reset_crew_code`, `update_tracker`, `delete_tracker`, updated `can_manage_event` / `join_event` |
 
 ## Security model
@@ -137,7 +205,7 @@ cp .env.example .env.local   # fill in your Supabase URL + anon key (+ service r
 Apply the database. Pick one:
 
 - **Supabase CLI:** `supabase link --project-ref <ref>` then `supabase db push`.
-- **SQL editor:** run the five files in `supabase/migrations/` in order.
+- **SQL editor:** run the six files in `supabase/migrations/` in order.
 
 To load the optional demo event (fictional players labelled "DEMO", invite code `DEMO2026`), also run `supabase/seed.sql`.
 
@@ -174,8 +242,8 @@ lot_number,name,nationality,origin,category,secondary_category,batting_style,bow
 
 | Command | What it checks |
 | --- | --- |
-| `npm test` | 21 unit tests for the engine and CSV import: spec rating example, rules, purse, Smart Bid (including the spec's ₹35 Cr example), simulation privacy, predictions, insights, alerts, leaderboard eligibility, 40 teams × 240 players performance |
-| `npm run test:db` | Applies all migrations to a throwaway PostgreSQL (with a stub `auth` schema) and runs `supabase/tests/`: roles, RLS isolation between events and between participants, joining by code, team claiming, sales, duplicate-purchase/overspend/below-base/max-rule/full-squad rejection, unsold → re-auction, undo, correction, reproducible balances, audit trail, anon lockout, **20 concurrent sales of one player (exactly one succeeds)**, and a **scale run of 40 teams / 240 players / 200 sales** |
+| `npm test` | 36 unit tests for the engine and CSV import: spec rating example, rules, purse, Smart Bid (including the spec's ₹35 Cr example), simulation privacy, predictions, insights, alerts, leaderboard eligibility, 40 teams × 240 players performance |
+| `npm run test:db` | Live entry with an empty player database (8 teams, unknown purse, idempotent retries, duplicates, rating scale, corrections, by-name shortlist privacy), 12 concurrent live entries of the same new player, trackers & crews, plus: Applies all migrations to a throwaway PostgreSQL (with a stub `auth` schema) and runs `supabase/tests/`: roles, RLS isolation between events and between participants, joining by code, team claiming, sales, duplicate-purchase/overspend/below-base/max-rule/full-squad rejection, unsold → re-auction, undo, correction, reproducible balances, audit trail, anon lockout, **20 concurrent sales of one player (exactly one succeeds)**, and a **scale run of 40 teams / 240 players / 200 sales** |
 | `npm run typecheck` / `npm run lint` | TypeScript and ESLint |
 | `npm run test:smoke` | Playwright: public pages render on desktop and mobile with no errors or horizontal overflow; protected routes redirect signed-out users |
 | `npm run test:e2e` | Playwright against `scripts/e2e/mock-supabase.cjs`, a fixture server fed by `scripts/e2e/make-fixtures.sql`, which plays a demo auction through the real RPCs. Renders all 35 signed-in pages on desktop and mobile and exercises Smart Bid, the simulator, notes and search |
