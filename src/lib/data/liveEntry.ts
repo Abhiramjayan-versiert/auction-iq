@@ -189,3 +189,13 @@ export function parsePastedRows(text: string, teams: TeamLite[]): PastedRow[] {
 
 export const isNetworkError = (e: { message?: string; code?: string } | null | undefined) =>
   !!e && (!e.code || /failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(e.message ?? ""));
+
+/** Turn low-level database errors into instructions an organiser can act on. */
+export function friendlyDbError(message: string): string {
+  if (/could not find the function|schema cache|PGRST202/i.test(message)) {
+    const fn = message.match(/public\.(\w+)/)?.[1];
+    return `The database is missing an update${fn ? ` (${fn})` : ""}. Ask the Super Admin to run the latest file in supabase/migrations in the Supabase SQL Editor, then reload the schema (see README → Setup). Your entry is kept here — press Retry afterwards.`;
+  }
+  if (/null value in column "(category|origin|initial_purse)"/i.test(message)) return "The database is missing the live-entry update (optional role/origin/purse). Run supabase/migrations/…_live_entry.sql in the Supabase SQL Editor.";
+  return message;
+}

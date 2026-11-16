@@ -1,9 +1,9 @@
 "use client";
-import Papa from "papaparse";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { CATEGORIES, CATEGORY_LABEL, type Category } from "@/lib/engine";
 import { matchResultRows, type ResultRow } from "@/lib/data/importResults";
+import { PLAYER_FILE_ACCEPT, readPlayerFile } from "@/lib/data/readPlayerFile";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useEventData } from "@/hooks/useEventData";
 import { Button } from "@/components/ui/button";
@@ -58,18 +58,14 @@ export function ResultsImport({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<ResultRow[] | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const onFile = async (file: File) => {
-    let records: Record<string, unknown>[];
-    if (/\.xls$/i.test(file.name)) {
-      toast.error("Old .xls files can't be read. Save the sheet as .xlsx or CSV and import that.");
-      return;
+    try {
+      const { rows: sheet } = await readPlayerFile(file);
+      const [head, ...body] = sheet as unknown[][];
+      const records = body.map((r) => Object.fromEntries((head ?? []).map((h, i) => [String(h ?? ""), r[i]])));
+      setRows(matchResultRows(records, players, teams));
+    } catch (e) {
+      toast.error(`Couldn't read “${file.name}”: ${(e as Error).message}`);
     }
-    if (/\.xlsx?$/i.test(file.name)) {
-      const { readSheet } = await import("read-excel-file/browser");
-      const sheet = (await readSheet(file)) as unknown[][];
-      const [head, ...body] = sheet;
-      records = body.map((r) => Object.fromEntries((head ?? []).map((h, i) => [String(h ?? ""), r[i]])));
-    } else records = Papa.parse<Record<string, unknown>>(await file.text(), { header: true, skipEmptyLines: true }).data;
-    setRows(matchResultRows(records, players, teams));
   };
   const ok = rows?.filter((r) => !r.problem) ?? [];
   const apply = async () => {
@@ -99,7 +95,7 @@ export function ResultsImport({ onClose }: { onClose: () => void }) {
     <Dialog open onClose={onClose} title="Import auction results" wide>
       <p className="text-sm text-muted">Upload the Excel or CSV sheet you keep during the auction. Columns: <b>player</b>, <b>team</b>, <b>price</b> (write <i>unsold</i> in team or price for unsold). Optional <b>role</b>, <b>origin</b>, <b>rating</b> create players that aren&apos;t in the list yet.</p>
       <div className="mt-3 flex gap-2">
-        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+        <input ref={fileRef} type="file" accept={PLAYER_FILE_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
         <Button onClick={() => fileRef.current?.click()}>Choose file</Button>
         <Button variant="outline" onClick={() => downloadCsv("results-template.csv", [{ player: "Player name", team: teams[0]?.name ?? "Team", price: 2.5, role: "BAT", origin: "Indian", rating: "" }])}>Template</Button>
       </div>

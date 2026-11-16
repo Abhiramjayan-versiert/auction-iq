@@ -1,12 +1,13 @@
 "use client";
 import { toast } from "sonner";
 import { supabaseBrowser } from "../supabase/client";
+import { friendlyDbError } from "./liveEntry";
 
 /** Calls a Postgres RPC, surfacing database-level validation errors to the user. */
 export async function rpc<T = unknown>(fn: string, args: Record<string, unknown>, success?: string): Promise<T | null> {
   const { data, error } = await supabaseBrowser().rpc(fn, args);
   if (error) {
-    toast.error(error.message);
+    toast.error(friendlyDbError(error.message));
     return null;
   }
   if (success) toast.success(success);

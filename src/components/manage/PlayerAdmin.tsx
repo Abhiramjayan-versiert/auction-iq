@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Papa from "papaparse";
 import { Download, Library, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CATEGORIES, CATEGORY_LABEL, fmtRating, type Category } from "@/lib/engine";
 import { ratingOf } from "@/lib/data/mappers";
 import { parsePlayerSheet, PLAYER_TEMPLATE_HEADERS, type ImportedPlayer } from "@/lib/data/importPlayers";
+import { PLAYER_FILE_ACCEPT, readPlayerFile, SUPPORTED_FORMATS_LABEL } from "@/lib/data/readPlayerFile";
+import { textToSheet } from "@/lib/data/textToSheet";
 import { rpc } from "@/lib/data/rpc";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { PlayerRow } from "@/lib/types/db";
@@ -36,6 +37,8 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
   const [edit, setEdit] = useState<PlayerRow | "new" | null>(null);
   const [preview, setPreview] = useState<{ players: ImportedPlayer[]; errors: string[]; warnings: string[] } | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const [lib, setLib] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -95,22 +98,7 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
     }
   };
 
-  const onFile = async (file: File) => {
-    if (fileRef.current) fileRef.current.value = "";
-    let sheet: unknown[][];
-    try {
-      if (/\.xls$/i.test(file.name)) {
-        return toast.error("Old .xls files can't be read. In Excel use File → Save As → Excel Workbook (.xlsx) or CSV, then import that.");
-      }
-      if (/\.(xlsx|xlsm)$/i.test(file.name)) {
-        const { readSheet } = await import("read-excel-file/browser");
-        sheet = (await readSheet(file)) as unknown[][];
-      } else {
-        sheet = Papa.parse<unknown[]>(await file.text(), { skipEmptyLines: true }).data;
-      }
-    } catch (e) {
-      return toast.error(`Couldn't read “${file.name}”: ${(e as Error).message}. Make sure it is an .xlsx or .csv file (the first sheet is imported).`);
-    }
+  const showPreview = (sheet: unknown[][], source: string, notes: string[] = []) => {
     const result = parsePlayerSheet(sheet);
     // names already in this event/library are skipped rather than failing the import
     const existing = new Set(rows.map((p) => p.name.trim().replace(/\s+/g, " ").toLowerCase()));
@@ -119,8 +107,20 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
     setPreview({
       players: fresh,
       errors: result.errors,
-      warnings: [...(skipped ? [`${skipped} player(s) already exist here and were skipped.`] : []), ...result.warnings, ...(result.headerDetected ? [] : ["No header row detected — the first column was read as player names."])],
+      warnings: [`Read from: ${source}.`, ...notes, ...(skipped ? [`${skipped} player(s) already exist here and were skipped.`] : []), ...result.warnings, ...(result.headerDetected ? [] : ["No header row detected — the first column was read as player names."])],
     });
+  };
+
+  const onFile = async (file: File) => {
+    if (fileRef.current) fileRef.current.value = "";
+    const t = toast.loading(`Reading ${file.name}…`);
+    try {
+      const { rows: sheet, source, notes } = await readPlayerFile(file, (msg) => toast.loading(msg, { id: t }));
+      toast.dismiss(t);
+      showPreview(sheet, source, notes);
+    } catch (e) {
+      toast.error(`Couldn't read “${file.name}”: ${(e as Error).message}`, { id: t });
+    }
   };
 
   const exportCsv = () =>
@@ -159,12 +159,13 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
     <div className="space-y-4">
       <PageHeader
         title={eventId ? "Players" : "Global player library"}
-        description={eventId ? `${rows.length} players in this event. Ratings must come from the organiser or a trusted source.` : "Reusable players and ratings that auctioneers can import into events."}
+        description={`${eventId ? `${rows.length} players in this event.` : "Reusable players and ratings that auctioneers can import into events."} Import from ${SUPPORTED_FORMATS_LABEL}, or paste a list. Only names are required.`}
         actions={
           <>
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept={PLAYER_FILE_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
             <Button variant="outline" size="sm" onClick={() => downloadCsv("player-template.csv", [Object.fromEntries(PLAYER_TEMPLATE_HEADERS.map((h) => [h, ""]))])}>Template</Button>
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import CSV / Excel</Button>
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} title={`Supported: ${SUPPORTED_FORMATS_LABEL}`}><Upload size={14} /> Import file</Button>
+            <Button variant="outline" size="sm" onClick={() => setPasteOpen(true)}>Paste a list</Button>
             <Button variant="outline" size="sm" onClick={exportCsv}><Download size={14} /> Export</Button>
             {eventId && <Button variant="outline" size="sm" onClick={() => setLib(true)}><Library size={14} /> From library</Button>}
             <Button size="sm" onClick={() => setEdit("new")}>Full form</Button>
@@ -198,6 +199,16 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
             <table className="w-full tabular"><tbody>{preview.players.slice(0, 200).map((p, i) => <tr key={i} className="border-t border-line/40"><td className="py-1">{p.name}</td><td className="text-muted">{p.origin ?? "—"}</td><td className="text-muted">{p.category ?? "—"}</td><td className="text-right">{p.base_price || ""}</td><td className="text-right">{p.ratings.overall ?? <span className="text-warn">unrated</span>}</td></tr>)}</tbody></table>
           </div>
           <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button><Button disabled={!preview.players.length || importing !== null} onClick={async () => { if (await insertPlayers(preview.players)) { toast.success(`${preview.players.length} players imported`); setPreview(null); } }}>{importing ? `Importing ${importing}…` : `Import ${preview.players.length}`}</Button></div>
+        </Dialog>
+      )}
+      {pasteOpen && (
+        <Dialog open onClose={() => setPasteOpen(false)} title="Paste a player list">
+          <p className="text-xs text-muted">One player per line. Copy from WhatsApp, a PDF, a website, Word or a spreadsheet — numbering like “1.” is removed, and columns separated by tabs, “|”, commas or wide spaces are kept (Name, Rating, Role, Country…).</p>
+          <textarea className="mt-2 min-h-56 w-full rounded-md border border-line bg-surface-2 p-2 font-mono text-xs" value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"1. Virat Kohli\n2. Rohit Sharma\n3. Jasprit Bumrah"} autoFocus />
+          <div className="mt-2 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPasteOpen(false)}>Cancel</Button>
+            <Button disabled={!pasteText.trim()} onClick={() => { setPasteOpen(false); showPreview(textToSheet(pasteText), "pasted text"); setPasteText(""); }}>Preview</Button>
+          </div>
         </Dialog>
       )}
       {lib && eventId && <LibraryDialog eventId={eventId} onClose={() => setLib(false)} onDone={refresh} />}

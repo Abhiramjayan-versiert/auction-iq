@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { isNetworkError, type EntryPayload } from "@/lib/data/liveEntry";
+import { friendlyDbError, isNetworkError, type EntryPayload } from "@/lib/data/liveEntry";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export interface QueueItem {
@@ -62,8 +62,9 @@ export function useEntryQueue(eventId: string, onSaved: () => void) {
             timer.current = setTimeout(() => void process(), delay);
             break;
           }
-          persist(itemsRef.current.map((i) => (i.clientRef === next.clientRef ? { ...i, status: "error", error: error.message } : i)));
-          toast.error(`${next.label}: ${error.message}`);
+          const msg = friendlyDbError(error.message);
+          persist(itemsRef.current.map((i) => (i.clientRef === next.clientRef ? { ...i, status: "error", error: msg } : i)));
+          toast.error(`${next.label}: ${msg}`);
           continue;
         }
         setOnline(true);

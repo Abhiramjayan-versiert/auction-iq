@@ -209,6 +209,8 @@ Apply the database. Pick one:
 
 To load the optional demo event (fictional players labelled "DEMO", invite code `DEMO2026`), also run `supabase/seed.sql`.
 
+If the app ever reports *"Could not find the function … in the schema cache"*, a migration hasn't been applied (or the API hasn't reloaded). Run the missing file(s) from `supabase/migrations/` in order, then run `notify pgrst, 'reload schema';` in the SQL editor.
+
 Then:
 
 1. Register in the app, then promote yourself to Super Admin in the SQL editor: `select public.promote_super_admin('you@example.com');`

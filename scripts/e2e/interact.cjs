@@ -158,6 +158,7 @@ const { chromium } = require("playwright");
   await page.locator("text=Import preview").waitFor({ timeout: 5000 }).catch(() => null);
   check((await page.locator("text=3 player(s) ready to import").count()) > 0, "Names-only .xlsx is read (3 players, no header, no roles)");
   await page.click("button:has-text('Import 3')");
+  await page.locator("text=Import preview").waitFor({ state: "hidden", timeout: 8000 }).catch(() => null);
   await page.locator("td", { hasText: "Jasprit Bumrah" }).first().waitFor({ timeout: 5000 }).catch(() => null);
   check((await page.locator("td", { hasText: "Jasprit Bumrah" }).count()) > 0, "Imported names appear in the player list");
   await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", "names-only.xlsx"));
@@ -167,6 +168,22 @@ const { chromium } = require("playwright");
   await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", "header-duplicates.xlsx"));
   await page.locator("text=Import preview").waitFor({ timeout: 5000 }).catch(() => null);
   check((await page.locator("text=duplicate name(s) in the file were skipped").count()) > 0, "'Player Names' header recognised and in-file duplicates skipped");
+  await page.keyboard.press("Escape");
+
+  // Other formats: PDF table, Word table, numbered text list, pasted list
+  const fileCase = async (file, expectText, label) => {
+    await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", file));
+    await page.locator("text=Import preview").waitFor({ timeout: 15000 }).catch(() => null);
+    check((await page.locator(`text=${expectText}`).count()) > 0, label);
+    await page.keyboard.press("Escape");
+  };
+  await fileCase("players-table.pdf", "Pdf Player Gamma", "PDF table read (names, with S.No column dropped)");
+  await fileCase("players.docx", "Docx Player Two", "Word (.docx) table read");
+  await fileCase("numbered-list.txt", "Shubman Gill", "Numbered text list read");
+  await page.click("button:has-text('Paste a list')");
+  await page.fill("textarea", "1. Pasted Player One\n2. Pasted Player Two");
+  await page.click("button:has-text('Preview')");
+  check((await page.locator("text=2 player(s) ready to import").count()) > 0, "Pasted list previewed");
   await page.keyboard.press("Escape");
 
   // ===== PARTICIPANT (mobile) sees the operator's entries =====
