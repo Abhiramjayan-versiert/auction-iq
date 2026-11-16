@@ -3,8 +3,8 @@ import type { Category, Origin } from "../engine";
 export interface ImportedPlayer {
   name: string;
   nationality: string | null;
-  origin: Origin;
-  category: Category;
+  origin: Origin | null;
+  category: Category | null;
   secondary_category: Category | null;
   batting_style: string | null;
   bowling_style: string | null;
@@ -69,27 +69,83 @@ const toNum = (v: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Converts loosely formatted CSV / Excel rows into validated player records. Ratings are imported as supplied — never invented. */
-export function normalisePlayerRows(rows: Record<string, unknown>[]) {
+
+/** Map a header cell to a field: exact alias first, then loose matches like "Player Names" or "Base Price (Cr)". */
+function headerField(h: unknown): string | null {
+  const k = norm(String(h ?? ""));
+  if (!k) return null;
+  for (const [field, aliases] of Object.entries(ALIASES)) if (aliases.includes(k)) return field;
+  if (/^(player|name|playername|playernames|names|players|fullname)/.test(k) || (k.includes("name") && !k.includes("team"))) return "name";
+  if (k.includes("baseprice") || k.startsWith("base")) return "base_price";
+  if (k.includes("rating") || k.includes("overall") || k.includes("points")) return "overall";
+  if (k.includes("role") || k.includes("category") || k.includes("skill")) return "category";
+  if (k.includes("country") || k.includes("nationality")) return "nationality";
+  if (k.includes("overseas") || k.includes("origin")) return "origin";
+  return null;
+}
+
+export interface PlayerSheetResult {
+  players: ImportedPlayer[];
+  /** rows that could not be imported */
+  errors: string[];
+  /** imported, but something was ignored or left blank */
+  warnings: string[];
+  headerDetected: boolean;
+}
+
+/**
+ * Converts a sheet (array of rows from Excel or CSV) into player records.
+ * Works with a full player sheet, a sheet with only some columns, or just a list of names (with or
+ * without a header row). Only the name is required; role, origin, prices and ratings are optional
+ * and are imported exactly as supplied — never invented.
+ */
+export function parsePlayerSheet(sheet: unknown[][]): PlayerSheetResult {
+  const rows = sheet.filter((r) => Array.isArray(r) && r.some((c) => String(c ?? "").trim() !== ""));
   const players: ImportedPlayer[] = [];
   const errors: string[] = [];
-  if (!rows.length) return { players, errors: ["The file has no rows."] };
-  const headers = Object.keys(rows[0]);
-  const col: Record<string, string | undefined> = {};
-  for (const [field, aliases] of Object.entries(ALIASES)) col[field] = headers.find((h) => aliases.includes(norm(h)));
-  if (!col.name) return { players, errors: ["Missing a 'name' column."] };
-  rows.forEach((r, i) => {
-    const get = (f: string) => (col[f] ? r[col[f] as string] : undefined);
-    const line = i + 2;
-    const name = String(get("name") ?? "").trim();
+  const warnings: string[] = [];
+  if (!rows.length) return { players, errors: ["The file is empty."], warnings, headerDetected: false };
+  const mapped = rows[0].map(headerField);
+  const headerDetected = mapped.includes("name");
+  let cols: (string | null)[];
+  let body: unknown[][];
+  if (headerDetected) {
+    cols = mapped;
+    body = rows.slice(1);
+  } else {
+    // No recognisable header: column A is the name; a numeric column B is treated as the rating.
+    const numericB = rows.every((r) => r[1] === undefined || r[1] === null || String(r[1]).trim() === "" || toNum(r[1]) !== null);
+    cols = rows[0].map((_, i) => (i === 0 ? "name" : i === 1 && numericB ? "overall" : null));
+    body = rows;
+    if (rows[0].length > 1 && !numericB) warnings.push("No header row found — only the first column (player names) was imported. Add headers like Name, Rating, Role, Country to import more.");
+  }
+  const seen = new Set<string>();
+  let dupes = 0;
+  let unknownRoles = 0;
+  body.forEach((r, i) => {
+    const get = (f: string) => {
+      const idx = cols.indexOf(f);
+      return idx >= 0 ? r[idx] : undefined;
+    };
+    const line = i + (headerDetected ? 2 : 1);
+    const name = String(get("name") ?? "").trim().replace(/\s+/g, " ");
     if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) {
+      dupes++;
+      return;
+    }
+    seen.add(key);
     const nationality = String(get("nationality") ?? "").trim() || null;
-    const category = parseCategory(get("category"));
+    const rawCat = get("category");
+    const category = parseCategory(rawCat);
+    if (rawCat !== undefined && String(rawCat ?? "").trim() && !category) unknownRoles++;
     const origin = parseOrigin(get("origin"), nationality);
-    if (!category) return errors.push(`Row ${line} (${name}): unknown role "${String(get("category") ?? "")}". Use BAT / BOWL / AR / WK.`);
-    if (!origin) return errors.push(`Row ${line} (${name}): cannot tell Indian or overseas — add an 'origin' or 'nationality' column.`);
-    const base = toNum(get("base_price")) ?? 0;
-    if (base < 0) return errors.push(`Row ${line} (${name}): negative base price.`);
+    const base = toNum(get("base_price"));
+    if (base !== null && base < 0) {
+      errors.push(`Row ${line} (${name}): negative base price.`);
+      return;
+    }
     const rating = (f: string) => {
       const n = toNum(get(f));
       return n !== null && n < 0 ? null : n;
@@ -102,10 +158,10 @@ export function normalisePlayerRows(rows: Record<string, unknown>[]) {
       secondary_category: parseCategory(get("secondary_category")),
       batting_style: String(get("batting_style") ?? "").trim() || null,
       bowling_style: String(get("bowling_style") ?? "").trim() || null,
-      base_price: base,
+      base_price: base ?? 0,
       photo_url: String(get("photo_url") ?? "").trim() || null,
       lot_number: toNum(get("lot_number")),
-      special_abilities: String(get("special_abilities") ?? "").split(/[;|,]/).map((s) => s.trim()).filter(Boolean),
+      special_abilities: String(get("special_abilities") ?? "").split(/[;|,]/).map((x) => x.trim()).filter(Boolean),
       ratings: {
         overall: rating("overall"),
         batting: rating("batting"),
@@ -117,7 +173,17 @@ export function normalisePlayerRows(rows: Record<string, unknown>[]) {
       },
     });
   });
-  return { players, errors };
+  if (dupes) warnings.push(`${dupes} duplicate name(s) in the file were skipped.`);
+  if (unknownRoles) warnings.push(`${unknownRoles} role value(s) weren't recognised (use Batsman / Bowler / All-rounder / Wicketkeeper) — those players were imported without a role.`);
+  return { players, errors, warnings, headerDetected };
+}
+
+/** Backwards-compatible wrapper for row objects (e.g. CSV parsed with headers). */
+export function normalisePlayerRows(rows: Record<string, unknown>[]) {
+  if (!rows.length) return { players: [] as ImportedPlayer[], errors: ["The file has no rows."], warnings: [] as string[] };
+  const headers = Object.keys(rows[0]);
+  const r = parsePlayerSheet([headers, ...rows.map((x) => headers.map((h) => x[h]))]);
+  return { players: r.players, errors: r.errors, warnings: r.warnings };
 }
 
 export const PLAYER_TEMPLATE_HEADERS = [

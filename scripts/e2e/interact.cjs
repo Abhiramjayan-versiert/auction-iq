@@ -152,6 +152,23 @@ const { chromium } = require("playwright");
   await page.locator("td", { hasText: "Offline Hero" }).first().waitFor({ timeout: 20000 }).catch(() => null);
   check((await page.locator("td", { hasText: "Offline Hero" }).count()) > 0, "Queued entry synced after reconnecting");
 
+  // Excel import of a names-only sheet (no header, no roles) on the Players page
+  await page.goto(`${BASE}/manage/${live}/players`, { waitUntil: "networkidle" });
+  await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", "names-only.xlsx"));
+  await page.locator("text=Import preview").waitFor({ timeout: 5000 }).catch(() => null);
+  check((await page.locator("text=3 player(s) ready to import").count()) > 0, "Names-only .xlsx is read (3 players, no header, no roles)");
+  await page.click("button:has-text('Import 3')");
+  await page.locator("td", { hasText: "Jasprit Bumrah" }).first().waitFor({ timeout: 5000 }).catch(() => null);
+  check((await page.locator("td", { hasText: "Jasprit Bumrah" }).count()) > 0, "Imported names appear in the player list");
+  await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", "names-only.xlsx"));
+  await page.locator("text=Import preview").waitFor({ timeout: 5000 }).catch(() => null);
+  check((await page.locator("text=already exist here and were skipped").count()) > 0, "Re-importing the same sheet skips existing names instead of failing");
+  await page.keyboard.press("Escape");
+  await page.setInputFiles("input[type=file]", require("path").join(__dirname, "files", "header-duplicates.xlsx"));
+  await page.locator("text=Import preview").waitFor({ timeout: 5000 }).catch(() => null);
+  check((await page.locator("text=duplicate name(s) in the file were skipped").count()) > 0, "'Player Names' header recognised and in-file duplicates skipped");
+  await page.keyboard.press("Escape");
+
   // ===== PARTICIPANT (mobile) sees the operator's entries =====
   const sessP = { ...session, access_token: `${b64({ alg: "HS256" })}.${b64({ sub: "0000000a-0000-0000-0000-000000000002", exp: 4102444800 })}.sig`, user: { ...session.user, id: "0000000a-0000-0000-0000-000000000002", email: "demo.player@example.com" } };
   const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 } });

@@ -59,6 +59,10 @@ export function ResultsImport({ onClose }: { onClose: () => void }) {
   const [progress, setProgress] = useState<string | null>(null);
   const onFile = async (file: File) => {
     let records: Record<string, unknown>[];
+    if (/\.xls$/i.test(file.name)) {
+      toast.error("Old .xls files can't be read. Save the sheet as .xlsx or CSV and import that.");
+      return;
+    }
     if (/\.xlsx?$/i.test(file.name)) {
       const { readSheet } = await import("read-excel-file/browser");
       const sheet = (await readSheet(file)) as unknown[][];

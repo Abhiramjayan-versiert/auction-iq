@@ -5,7 +5,7 @@ import { Download, Library, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CATEGORIES, CATEGORY_LABEL, fmtRating, type Category } from "@/lib/engine";
 import { ratingOf } from "@/lib/data/mappers";
-import { normalisePlayerRows, PLAYER_TEMPLATE_HEADERS, type ImportedPlayer } from "@/lib/data/importPlayers";
+import { parsePlayerSheet, PLAYER_TEMPLATE_HEADERS, type ImportedPlayer } from "@/lib/data/importPlayers";
 import { rpc } from "@/lib/data/rpc";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { PlayerRow } from "@/lib/types/db";
@@ -34,25 +34,48 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
 
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<PlayerRow | "new" | null>(null);
-  const [preview, setPreview] = useState<{ players: ImportedPlayer[]; errors: string[] } | null>(null);
+  const [preview, setPreview] = useState<{ players: ImportedPlayer[]; errors: string[]; warnings: string[] } | null>(null);
+  const [importing, setImporting] = useState<string | null>(null);
   const [lib, setLib] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const [quick, setQuick] = useState({ name: "", category: "BAT" as Category, origin: "indian", base_price: "", overall: "" });
 
   const insertPlayers = async (list: ImportedPlayer[]) => {
-    const payload = list.map((p) => ({
-      event_id: eventId, name: p.name, nationality: p.nationality, origin: p.origin, category: p.category, secondary_category: p.secondary_category,
-      batting_style: p.batting_style, bowling_style: p.bowling_style, base_price: p.base_price, photo_url: p.photo_url, lot_number: p.lot_number,
-      special_abilities: p.special_abilities, auction_status: "upcoming",
-    }));
-    const { data, error } = await sb.from("players").insert(payload).select("id");
-    if (error) return toast.error(error.message), false;
-    const ratings = (data ?? []).map((r, i) => ({ player_id: r.id, ...list[i].ratings, source: eventId ? "event organiser" : "platform library" })).filter((r) => RATING_KEYS.some((k) => r[k] !== null));
-    if (ratings.length) {
-      const { error: e2 } = await sb.from("player_ratings").insert(ratings);
-      if (e2) toast.error(e2.message);
+    // Inserted in chunks so a large sheet never hits request limits; ratings are matched back by name.
+    let done = 0;
+    for (let i = 0; i < list.length; i += 150) {
+      const chunk = list.slice(i, i + 150);
+      if (list.length > 150) setImporting(`${done}/${list.length}`);
+      const payload = chunk.map((p) => ({
+        event_id: eventId, name: p.name, nationality: p.nationality, origin: p.origin, category: p.category, secondary_category: p.secondary_category,
+        batting_style: p.batting_style, bowling_style: p.bowling_style, base_price: p.base_price, photo_url: p.photo_url, lot_number: p.lot_number,
+        special_abilities: p.special_abilities, auction_status: "upcoming",
+      }));
+      const { data, error } = await sb.from("players").insert(payload).select("id, name");
+      if (error) {
+        setImporting(null);
+        await refresh();
+        toast.error(
+          /duplicate key|players_event_name_key/i.test(error.message)
+            ? "Some names already exist in this event (names are matched ignoring capitals and spaces). Remove them from the sheet and try again."
+            : /row-level security|permission/i.test(error.message)
+              ? "You don't have permission to add players to this event."
+              : `Import stopped after ${done} player(s): ${error.message}`,
+        );
+        return false;
+      }
+      const byName = new Map(chunk.map((p) => [p.name.toLowerCase(), p]));
+      const ratings = (data ?? [])
+        .map((r) => ({ player_id: r.id, ...(byName.get(String(r.name).toLowerCase())?.ratings ?? {}), source: eventId ? "event organiser" : "platform library" }))
+        .filter((r) => RATING_KEYS.some((k) => (r as Record<string, unknown>)[k] !== null && (r as Record<string, unknown>)[k] !== undefined));
+      if (ratings.length) {
+        const { error: e2 } = await sb.from("player_ratings").insert(ratings);
+        if (e2) toast.error(`Players imported, but ratings failed: ${e2.message}`);
+      }
+      done += chunk.length;
     }
+    setImporting(null);
     await refresh();
     return true;
   };
@@ -73,18 +96,31 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
   };
 
   const onFile = async (file: File) => {
-    let records: Record<string, unknown>[] = [];
-    if (/\.xlsx?$/i.test(file.name)) {
-      const { readSheet } = await import("read-excel-file/browser");
-      const sheet = (await readSheet(file)) as unknown[][];
-      const [head, ...body] = sheet;
-      records = body.map((r) => Object.fromEntries((head ?? []).map((h, i) => [String(h ?? ""), r[i]])));
-    } else {
-      const parsed = Papa.parse<Record<string, unknown>>(await file.text(), { header: true, skipEmptyLines: true });
-      records = parsed.data;
-    }
-    setPreview(normalisePlayerRows(records));
     if (fileRef.current) fileRef.current.value = "";
+    let sheet: unknown[][];
+    try {
+      if (/\.xls$/i.test(file.name)) {
+        return toast.error("Old .xls files can't be read. In Excel use File → Save As → Excel Workbook (.xlsx) or CSV, then import that.");
+      }
+      if (/\.(xlsx|xlsm)$/i.test(file.name)) {
+        const { readSheet } = await import("read-excel-file/browser");
+        sheet = (await readSheet(file)) as unknown[][];
+      } else {
+        sheet = Papa.parse<unknown[]>(await file.text(), { skipEmptyLines: true }).data;
+      }
+    } catch (e) {
+      return toast.error(`Couldn't read “${file.name}”: ${(e as Error).message}. Make sure it is an .xlsx or .csv file (the first sheet is imported).`);
+    }
+    const result = parsePlayerSheet(sheet);
+    // names already in this event/library are skipped rather than failing the import
+    const existing = new Set(rows.map((p) => p.name.trim().replace(/\s+/g, " ").toLowerCase()));
+    const fresh = result.players.filter((p) => !existing.has(p.name.toLowerCase()));
+    const skipped = result.players.length - fresh.length;
+    setPreview({
+      players: fresh,
+      errors: result.errors,
+      warnings: [...(skipped ? [`${skipped} player(s) already exist here and were skipped.`] : []), ...result.warnings, ...(result.headerDetected ? [] : ["No header row detected — the first column was read as player names."])],
+    });
   };
 
   const exportCsv = () =>
@@ -126,7 +162,7 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
         description={eventId ? `${rows.length} players in this event. Ratings must come from the organiser or a trusted source.` : "Reusable players and ratings that auctioneers can import into events."}
         actions={
           <>
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
             <Button variant="outline" size="sm" onClick={() => downloadCsv("player-template.csv", [Object.fromEntries(PLAYER_TEMPLATE_HEADERS.map((h) => [h, ""]))])}>Template</Button>
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import CSV / Excel</Button>
             <Button variant="outline" size="sm" onClick={exportCsv}><Download size={14} /> Export</Button>
@@ -155,12 +191,13 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
       {edit && <PlayerEditDialog player={edit === "new" ? null : edit} eventId={eventId} onClose={() => setEdit(null)} onSaved={refresh} />}
       {preview && (
         <Dialog open onClose={() => setPreview(null)} title="Import preview" wide>
-          <p className="text-sm">{preview.players.length} players ready to import{preview.errors.length ? `, ${preview.errors.length} rows skipped` : ""}.</p>
-          {preview.errors.length > 0 && <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-warn">{preview.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+          <p className="text-sm">{preview.players.length} player(s) ready to import{preview.errors.length ? `, ${preview.errors.length} row(s) with problems` : ""}. Only the name is required — anything else in the sheet is imported as given.</p>
+          {preview.warnings.length > 0 && <ul className="mt-2 space-y-0.5 text-xs text-muted">{preview.warnings.map((e) => <li key={e}>• {e}</li>)}</ul>}
+          {preview.errors.length > 0 && <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-danger">{preview.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
           <div className="mt-3 max-h-72 overflow-y-auto text-xs">
-            <table className="w-full tabular"><tbody>{preview.players.slice(0, 200).map((p, i) => <tr key={i} className="border-t border-line/40"><td className="py-1">{p.name}</td><td>{p.origin}</td><td>{p.category}</td><td className="text-right">{p.base_price}</td><td className="text-right">{p.ratings.overall ?? <span className="text-warn">unrated</span>}</td></tr>)}</tbody></table>
+            <table className="w-full tabular"><tbody>{preview.players.slice(0, 200).map((p, i) => <tr key={i} className="border-t border-line/40"><td className="py-1">{p.name}</td><td className="text-muted">{p.origin ?? "—"}</td><td className="text-muted">{p.category ?? "—"}</td><td className="text-right">{p.base_price || ""}</td><td className="text-right">{p.ratings.overall ?? <span className="text-warn">unrated</span>}</td></tr>)}</tbody></table>
           </div>
-          <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button><Button disabled={!preview.players.length} onClick={async () => { if (await insertPlayers(preview.players)) { toast.success(`${preview.players.length} players imported`); setPreview(null); } }}>Import {preview.players.length}</Button></div>
+          <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button><Button disabled={!preview.players.length || importing !== null} onClick={async () => { if (await insertPlayers(preview.players)) { toast.success(`${preview.players.length} players imported`); setPreview(null); } }}>{importing ? `Importing ${importing}…` : `Import ${preview.players.length}`}</Button></div>
         </Dialog>
       )}
       {lib && eventId && <LibraryDialog eventId={eventId} onClose={() => setLib(false)} onDone={refresh} />}
