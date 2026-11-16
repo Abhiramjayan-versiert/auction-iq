@@ -147,6 +147,12 @@ export function PlayerDialog({ player, onClose }: { player: Player | null; onClo
         {player.special_abilities?.length ? ` · ${player.special_abilities.join(", ")}` : ""}
         <span className="ml-2 text-faint">Ratings source: {player.rating_source ?? "not rated"} (scale {rules.rating_scale_max})</span>
       </div>
+      {(player.lot_number != null || (player.attributes && Object.keys(player.attributes).length > 0)) && (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+          {player.lot_number != null && <Badge>Player no. {player.lot_number}</Badge>}
+          {Object.entries(player.attributes ?? {}).map(([k, v]) => <Badge key={k}>{k}: {v}</Badge>)}
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line/60 pt-3">
         <span className="text-xs text-faint">Private shortlist:</span>
         {(["target", "backup", "avoid"] as const).map((l) => (

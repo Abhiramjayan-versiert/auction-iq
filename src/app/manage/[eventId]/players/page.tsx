@@ -4,5 +4,5 @@ import { useEventData } from "@/hooks/useEventData";
 
 export default function EventPlayers() {
   const { event, playerRows, reload, rules } = useEventData();
-  return <PlayerAdmin eventId={event!.id} rows={playerRows} onChanged={reload} currency={rules.currency} />;
+  return <PlayerAdmin eventId={event!.id} rows={playerRows} onChanged={reload} currency={rules.currency} ratingScale={rules.rating_scale_max} />;
 }

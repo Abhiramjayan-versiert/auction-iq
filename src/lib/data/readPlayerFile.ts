@@ -14,6 +14,8 @@ export interface FileRows {
   rows: unknown[][];
   source: string;
   notes: string[];
+  /** all non-empty sheets of a workbook, so the organiser can pick another one */
+  sheets?: { name: string; rows: unknown[][] }[];
 }
 
 const ext = (name: string) => (name.split(".").pop() ?? "").toLowerCase();
@@ -101,8 +103,14 @@ export async function readPlayerFile(file: File, onProgress?: (m: string) => voi
         : `.${e} files can't be read directly. Save the sheet as .xlsx or CSV (File → Save As / Download as) and upload that.`,
     );
   if (e === "xlsx" || e === "xlsm") {
-    const { readSheet } = await import("read-excel-file/browser");
-    return { rows: (await readSheet(file)) as unknown[][], source: "Excel (first sheet)", notes: [] };
+    const { default: readXlsxFile } = await import("read-excel-file/browser");
+    const all = ((await readXlsxFile(file)) as { sheet: string; data: unknown[][] }[])
+      .map((s) => ({ name: s.sheet, rows: s.data }))
+      .filter((s) => s.rows.some((r) => r.some((c) => c !== null && String(c).trim() !== "")));
+    if (!all.length) throw new Error("The workbook has no data.");
+    // start with the sheet that has the most filled rows
+    const first = [...all].sort((a, b) => b.rows.length - a.rows.length)[0];
+    return { rows: first.rows, source: `Excel sheet “${first.name}”`, notes: [], sheets: all.length > 1 ? all : undefined };
   }
   if (e === "pdf" || type === "application/pdf") return readPdf(file, onProgress);
   if (e === "docx") return readDocx(file);

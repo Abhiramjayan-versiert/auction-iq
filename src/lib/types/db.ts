@@ -97,6 +97,7 @@ export interface PlayerRow {
   bowling_style: string | null;
   base_price: number;
   special_abilities: string[];
+  attributes?: Record<string, string> | null;
   availability: boolean;
   auction_status: "upcoming" | "available" | "sold" | "unsold" | "withdrawn";
   sold_team_id: string | null;

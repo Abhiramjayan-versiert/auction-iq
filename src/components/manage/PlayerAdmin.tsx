@@ -4,7 +4,8 @@ import { Download, Library, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CATEGORIES, CATEGORY_LABEL, fmtRating, type Category } from "@/lib/engine";
 import { ratingOf } from "@/lib/data/mappers";
-import { parsePlayerSheet, PLAYER_TEMPLATE_HEADERS, type ImportedPlayer } from "@/lib/data/importPlayers";
+import { PLAYER_TEMPLATE_HEADERS, type ImportedPlayer } from "@/lib/data/importPlayers";
+import { ImportPreview } from "./ImportPreview";
 import { PLAYER_FILE_ACCEPT, readPlayerFile, SUPPORTED_FORMATS_LABEL } from "@/lib/data/readPlayerFile";
 import { textToSheet } from "@/lib/data/textToSheet";
 import { rpc } from "@/lib/data/rpc";
@@ -21,7 +22,7 @@ import { downloadCsv } from "@/lib/utils";
 const RATING_KEYS = ["overall", "batting", "bowling", "fielding", "wicketkeeping", "consistency", "experience"] as const;
 
 /** Player database management for an event (eventId) or the global library (eventId = null). */
-export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr" }: { eventId: string | null; rows?: PlayerRow[]; onChanged?: () => Promise<void>; currency?: string }) {
+export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr", ratingScale }: { eventId: string | null; rows?: PlayerRow[]; onChanged?: () => Promise<void>; currency?: string; ratingScale?: number }) {
   const sb = supabaseBrowser();
   const [own, setOwn] = useState<PlayerRow[]>([]);
   const loadOwn = useCallback(async () => {
@@ -35,7 +36,7 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
 
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<PlayerRow | "new" | null>(null);
-  const [preview, setPreview] = useState<{ players: ImportedPlayer[]; errors: string[]; warnings: string[] } | null>(null);
+  const [preview, setPreview] = useState<{ sheets: { name: string; rows: unknown[][] }[]; source: string; notes: string[] } | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -53,7 +54,7 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
       const payload = chunk.map((p) => ({
         event_id: eventId, name: p.name, nationality: p.nationality, origin: p.origin, category: p.category, secondary_category: p.secondary_category,
         batting_style: p.batting_style, bowling_style: p.bowling_style, base_price: p.base_price, photo_url: p.photo_url, lot_number: p.lot_number,
-        special_abilities: p.special_abilities, auction_status: "upcoming",
+        special_abilities: p.special_abilities, attributes: p.attributes ?? {}, auction_status: "upcoming",
       }));
       const { data, error } = await sb.from("players").insert(payload).select("id, name");
       if (error) {
@@ -98,26 +99,18 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
     }
   };
 
-  const showPreview = (sheet: unknown[][], source: string, notes: string[] = []) => {
-    const result = parsePlayerSheet(sheet);
-    // names already in this event/library are skipped rather than failing the import
-    const existing = new Set(rows.map((p) => p.name.trim().replace(/\s+/g, " ").toLowerCase()));
-    const fresh = result.players.filter((p) => !existing.has(p.name.toLowerCase()));
-    const skipped = result.players.length - fresh.length;
-    setPreview({
-      players: fresh,
-      errors: result.errors,
-      warnings: [`Read from: ${source}.`, ...notes, ...(skipped ? [`${skipped} player(s) already exist here and were skipped.`] : []), ...result.warnings, ...(result.headerDetected ? [] : ["No header row detected — the first column was read as player names."])],
-    });
+  const showPreview = (sheet: unknown[][], source: string, notes: string[] = [], sheets?: { name: string; rows: unknown[][] }[]) => {
+    setPreview({ sheets: sheets ?? [{ name: source, rows: sheet }], source, notes });
   };
+  const existingNames = new Set(rows.map((p) => p.name.trim().replace(/\s+/g, " ").toLowerCase()));
 
   const onFile = async (file: File) => {
     if (fileRef.current) fileRef.current.value = "";
     const t = toast.loading(`Reading ${file.name}…`);
     try {
-      const { rows: sheet, source, notes } = await readPlayerFile(file, (msg) => toast.loading(msg, { id: t }));
+      const { rows: sheet, source, notes, sheets } = await readPlayerFile(file, (msg) => toast.loading(msg, { id: t }));
       toast.dismiss(t);
-      showPreview(sheet, source, notes);
+      showPreview(sheet, source, notes, sheets ? [{ name: sheets.find((x) => x.rows === sheet)?.name ?? "Sheet 1", rows: sheet }, ...sheets.filter((x) => x.rows !== sheet)] : undefined);
     } catch (e) {
       toast.error(`Couldn't read “${file.name}”: ${(e as Error).message}`, { id: t });
     }
@@ -191,15 +184,17 @@ export function PlayerAdmin({ eventId, rows: external, onChanged, currency = "Cr
       </Card>
       {edit && <PlayerEditDialog player={edit === "new" ? null : edit} eventId={eventId} onClose={() => setEdit(null)} onSaved={refresh} />}
       {preview && (
-        <Dialog open onClose={() => setPreview(null)} title="Import preview" wide>
-          <p className="text-sm">{preview.players.length} player(s) ready to import{preview.errors.length ? `, ${preview.errors.length} row(s) with problems` : ""}. Only the name is required — anything else in the sheet is imported as given.</p>
-          {preview.warnings.length > 0 && <ul className="mt-2 space-y-0.5 text-xs text-muted">{preview.warnings.map((e) => <li key={e}>• {e}</li>)}</ul>}
-          {preview.errors.length > 0 && <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-danger">{preview.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
-          <div className="mt-3 max-h-72 overflow-y-auto text-xs">
-            <table className="w-full tabular"><tbody>{preview.players.slice(0, 200).map((p, i) => <tr key={i} className="border-t border-line/40"><td className="py-1">{p.name}</td><td className="text-muted">{p.origin ?? "—"}</td><td className="text-muted">{p.category ?? "—"}</td><td className="text-right">{p.base_price || ""}</td><td className="text-right">{p.ratings.overall ?? <span className="text-warn">unrated</span>}</td></tr>)}</tbody></table>
-          </div>
-          <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button><Button disabled={!preview.players.length || importing !== null} onClick={async () => { if (await insertPlayers(preview.players)) { toast.success(`${preview.players.length} players imported`); setPreview(null); } }}>{importing ? `Importing ${importing}…` : `Import ${preview.players.length}`}</Button></div>
-        </Dialog>
+        <ImportPreview
+          sheets={preview.sheets}
+          source={preview.source}
+          notes={preview.notes}
+          existingNames={existingNames}
+          ratingScale={eventId ? ratingScale : undefined}
+          importing={importing}
+          onClose={() => setPreview(null)}
+          onImport={async (players) => { if (await insertPlayers(players)) { toast.success(`${players.length} players imported`); setPreview(null); } }}
+          onSetScale={eventId ? async (scale) => { const r = await rpc("save_event_rules", { p_event: eventId, p_rules: { rating_scale_max: scale }, p_constraints: null }, `Rating scale set to ${scale}`); if (r) await refresh(); } : undefined}
+        />
       )}
       {pasteOpen && (
         <Dialog open onClose={() => setPasteOpen(false)} title="Paste a player list">

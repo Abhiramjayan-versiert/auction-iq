@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalisePlayerRows, parseCategory, parseOrigin, parsePlayerSheet } from "./importPlayers";
+import { applyPlan, normalisePlayerRows, parseCategory, parseOrigin, parsePlayerSheet } from "./importPlayers";
 
 describe("player import", () => {
   it("imports a sheet that is just a list of names (no header)", () => {
@@ -27,11 +27,43 @@ describe("player import", () => {
     expect(r.headerDetected).toBe(true);
     expect(r.errors).toEqual([]);
     expect(r.players).toHaveLength(2); // duplicate (case/space-insensitive) skipped, blank row ignored
-    expect(r.players[0]).toMatchObject({ name: "Arun Kumar", category: "WK", origin: "indian", base_price: 2, lot_number: 1 });
+    expect(r.players[0]).toMatchObject({ name: "Arun Kumar", category: "WK", origin: "indian", base_price: 2, lot_number: null }); // S.No is a row serial
     expect(r.players[0].ratings.overall).toBe(8.5);
     expect(r.players[1]).toMatchObject({ name: "Ben", category: null, origin: "overseas" }); // unknown role kept blank, not rejected
     expect(r.warnings.join(" ")).toMatch(/duplicate/);
     expect(r.warnings.join(" ")).toMatch(/weren't recognised/);
+  });
+
+  it("handles the CET-style sheet: blank/unnamed number columns, POSITION, INDIAN OR FOREIGN, * markers, extras", () => {
+    const sheet = [
+      [null, null, "Unnamed: 0", "PLAYER", "POSITION", "INDIAN OR FOREIGN", "RATING", "BASE PRICE", "Unnamed: 5"],
+      [null, 1, 5, "ALPHA ONE", "BATSMAN", "INDIAN", 8.7, 1, "Yes"],
+      [null, 2, 8, "BRAVO TWO *", "BATSMAN", "FOREIGNER", 9.1, 1.5, "Yes"],
+      [null, 3, 23, "CHARLIE THREE *", "ALL ROUNDER", "INDIAN", 13.5, 2.5, null],
+      [null, 4, 41, "DELTA FOUR", "WICKETKEEPER", null, 15, 2, null],
+      [null, 5, 41, "ECHO FIVE *", "BOWLER", null, 7.5, 0.5, null],
+      [null, 76, null, null, null, null, null, null, null],
+    ];
+    const r = parsePlayerSheet(sheet);
+    const f = Object.fromEntries(r.plan.columns.map((c) => [c.index, c.field]));
+    expect(f).toMatchObject({ 1: "ignore", 2: "lot_number", 3: "name", 4: "category", 5: "origin", 6: "overall", 7: "base_price", 8: "extra" });
+    expect(r.players).toHaveLength(5);
+    expect(r.players[1]).toMatchObject({ name: "BRAVO TWO", origin: "overseas", lot_number: 8, base_price: 1.5, attributes: { "Column I": "Yes" } });
+    expect(r.players[2]).toMatchObject({ name: "CHARLIE THREE", category: "AR", origin: "indian" });
+    expect(r.players[4]).toMatchObject({ name: "ECHO FIVE", origin: "overseas", category: "BOWL" });
+    expect(r.maxRating).toBe(15);
+    const w = r.warnings.join(" ");
+    expect(w).toMatch(/treated as overseas/);
+    expect(w).toMatch(/listed as Indian.*CHARLIE THREE/);
+    expect(w).toMatch(/more than once: 41/);
+  });
+
+  it("lets the organiser remap columns", () => {
+    const sheet = [["Name", "Mystery"], ["A", "Bowler"], ["B", "Batsman"]];
+    const r1 = parsePlayerSheet(sheet);
+    const plan = { ...r1.plan, columns: r1.plan.columns.map((c) => (c.header === "Mystery" ? { ...c, field: "category" as const } : c)) };
+    const r2 = applyPlan(sheet, plan);
+    expect(r2.players[0].category).toBe("BOWL");
   });
 
   it("keeps the old row-object API working", () => {

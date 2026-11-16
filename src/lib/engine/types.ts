@@ -44,6 +44,8 @@ export interface Player {
   sold_price?: number | null;
   rating_source?: string | null;
   lot_number?: number | null;
+  /** extra columns from the organiser's sheet, kept as-is */
+  attributes?: Record<string, string> | null;
 }
 
 export interface Team {
