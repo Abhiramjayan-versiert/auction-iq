@@ -75,7 +75,8 @@ function ceiling(a: EventAnalysis, t: TeamAnalysis, p: Player, strategy: Strateg
   const floorReserve = completionPlan(a.rules, after.rules, a.market, "floor").cost;
   const reserve = reserveFor(after.rules, a.market, strategy);
   const discretionary = round2(t.remaining - reserve);
-  const maxSafe = round2(Math.max(0, t.remaining - floorReserve));
+  // the event's purse rule (when enforced) is a hard cap the server will apply
+  const maxSafe = round2(Math.max(0, Math.min(t.remaining - floorReserve, a.rules.enforce_max_bid ? t.ruleMaxBid : Infinity)));
   // rating percentile among every player recorded this event (the pool is built live)
   const universe = a.market.available.length >= 5 ? a.market.available : [...a.market.available, ...a.teams.flatMap((x) => x.players)];
   const q = percentile(p, universe.length ? universe : [p]);

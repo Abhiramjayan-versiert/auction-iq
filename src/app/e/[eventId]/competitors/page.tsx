@@ -16,7 +16,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { cn } from "@/lib/utils";
 
 export default function Competitors() {
-  const { event, myTeamId, rules } = useEventData();
+  const { event, myTeamId } = useEventData();
   const { intel } = useWorkspace();
   const m = useMoney();
   const flags = useMemo(() => classifyTeams(intel), [intel]);
@@ -36,7 +36,8 @@ export default function Competitors() {
     { key: "spent", header: "Spent", align: "right", cell: (t) => m(t.spent), sort: (t) => t.spent },
     { key: "rem", header: "Remaining", align: "right", cell: (t) => <b className={cn(!t.purseSufficient && "text-danger")}>{m(t.remaining)}</b>, sort: (t) => t.remaining },
     { key: "util", header: "Used", align: "right", cell: (t) => fmtPct(t.utilization), sort: (t) => t.utilization },
-    { key: "cap", header: "Max bid", align: "right", cell: (t) => m(t.maxSingleBid), sort: (t) => t.maxSingleBid },
+    { key: "rmax", header: "Max bid", align: "right", cell: (t) => <b className="text-accent">{m(t.ruleMaxBid)}</b>, sort: (t) => t.ruleMaxBid },
+    { key: "cap", header: "Safe max (roles)", align: "right", cell: (t) => m(t.maxSingleBid), sort: (t) => t.maxSingleBid },
     { key: "avg", header: "Avg", align: "right", cell: (t) => <span><b>{fmtRating(t.rating.average)}</b>{t.rating.ratedCount < t.rating.count && <span className="ml-1 text-[10px] text-faint">{t.rating.ratedCount}/{t.rating.count}</span>}</span>, sort: (t) => t.rating.average },
     { key: "tot", header: "Total", align: "right", cell: (t) => fmtRating(t.rating.total), sort: (t) => t.rating.total },
     { key: "proj", header: "Projected", align: "right", cell: (t) => fmtRating(t.projectedAverage), sort: (t) => t.projectedAverage },
@@ -78,7 +79,7 @@ export default function Competitors() {
             <option value="">All teams</option>
             {(Object.keys(FLAG_LABEL) as CompetitorFlag[]).map((f) => <option key={f} value={f}>{FLAG_LABEL[f]}</option>)}
           </Select>
-          <span className="ml-auto self-center text-xs text-faint">Max bid = largest bid a team can make and still complete its mandatory squad at floor prices ({rules.currency}).</span>
+          <span className="ml-auto self-center text-xs text-faint">Max bid = purse left − minimum price × players still needed. Safe max (roles) also reserves for required roles.</span>
         </div>
         <DataTable rows={rows} columns={cols} rowKey={(t) => t.team.id} initialSort={{ key: "rank", dir: "desc" }} onRowClick={setDetail} rowClassName={(t) => (t.team.id === myTeamId ? "bg-accent/5" : undefined)} dense />
       </Card>

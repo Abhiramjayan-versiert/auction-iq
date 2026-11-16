@@ -62,6 +62,8 @@ export default function ControlRoom() {
   const warnings: string[] = [];
   if (current && t) {
     if (amt < current.base_price) warnings.push(`Below base price ${m(current.base_price)}.`);
+    if (t.purseKnown && amt <= t.remaining && amt > t.ruleMaxBid)
+      warnings.push(`${rules.enforce_max_bid ? "" : "Warning: "}Above ${t.team.name}'s maximum bid ${m(t.ruleMaxBid)} (must keep ${m(t.ruleSlotsAfter * analysis.market.ruleMinPrice)} for ${t.ruleSlotsAfter} more player(s)).`);
     if (t.purseKnown && amt > t.remaining) warnings.push(`${rules.allow_overspend ? "Warning: e" : "E"}xceeds ${t.team.name}'s remaining purse ${m(t.remaining)}.`);
     const curCell = cellOf(current);
     const allowed = cellAllowed(rules, t.rules.cellCounts, curCell, t.rules.size);

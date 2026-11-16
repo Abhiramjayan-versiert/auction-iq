@@ -33,6 +33,8 @@ export interface MarketStats {
   /** share of entered players with a recorded rating (0..1) */
   ratingCoverage: number;
   enteredCount: number;
+  /** minimum price per player used by the purse rule: configured minimum, else cheapest recorded base price, else 0 */
+  ruleMinPrice: number;
 }
 
 export interface CompletionPlan {
@@ -74,6 +76,13 @@ export interface TeamAnalysis {
   projectedTotal: number;
   /** largest single bid the team can make and still complete the mandatory squad (NaN when purse unknown) */
   maxSingleBid: number;
+  /**
+   * Purse-rule maximum bid: remaining − (players still needed for the minimum squad after this buy × minimum price).
+   * Mirrors the server's team_max_bid(); enforced when rules.enforce_max_bid is on. NaN when purse unknown.
+   */
+  ruleMaxBid: number;
+  /** players still needed for the minimum squad after the next purchase */
+  ruleSlotsAfter: number;
   overseasCount: number;
   indianCount: number;
   hasEstimates: boolean;
@@ -195,6 +204,13 @@ function marketStats(s: EventSnapshot, taken: Set<string>): BaseMarket {
     categoryCoverage: entered ? s.players.filter((p) => cellOf(p) !== null).length / entered : 0,
     ratingCoverage: entered ? ratedAll.length / entered : 0,
     enteredCount: entered,
+    ruleMinPrice: round2(
+      s.rules.min_player_price ??
+        (() => {
+          const b = s.players.filter((p) => p.auction_status !== "withdrawn").map((p) => Number(p.base_price)).filter((x) => x > 0);
+          return b.length ? Math.min(...b) : 0;
+        })(),
+    ),
   };
 }
 
@@ -380,10 +396,14 @@ export function analyseTeam(rules: RuleSet, team: Team, entries: RosterEntry[], 
   if (!purseKnown) {
     evaluation.alerts.push({ level: "info", kind: "purse", message: "Initial purse not set yet — purse calculations are disabled for this team." });
   }
+  const ruleSlotsAfter = Math.max(0, rules.squad_min - (players.length + 1));
+  const ruleMaxBid = purseKnown ? round2(Math.max(0, remaining - ruleSlotsAfter * market.ruleMinPrice)) : NaN;
   return {
     team,
     entries,
     players,
+    ruleMaxBid,
+    ruleSlotsAfter,
     purseKnown,
     initialPurse,
     spent,

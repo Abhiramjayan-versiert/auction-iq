@@ -2,14 +2,15 @@
 import { useMemo, useState } from "react";
 import { cellLabel, fmtRating, generateInsights, simulate, CATEGORY_LABEL, type EventAnalysis } from "@/lib/engine";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge, Progress, Tabs } from "@/components/ui/misc";
+import { Badge, Tabs } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
 import { RuleAlerts } from "@/components/domain/alerts";
 import { CategoryBadge } from "@/components/domain/badges";
 import { InsightCard } from "@/components/domain/insight";
-import { PlayerAvatar, TeamChip } from "@/components/domain/team";
+import { PlayerAvatar } from "@/components/domain/team";
 import { CompositionGrid, SmartBidPanel, useMoney } from "@/components/participant/shared";
+import { LiveStandings } from "@/components/participant/LiveStandings";
 import { useMyTeam } from "@/components/participant/NeedTeam";
 import { useEventData } from "@/hooks/useEventData";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -33,8 +34,6 @@ export default function LiveWorkspace() {
   if (!officialMe || !me) return prompt;
   const p = session?.current_player_id ? playerById[session.current_player_id] : null;
   const recent = transactions.filter((t) => t.status === "active").slice(0, 10);
-  const comps = [...a.teams].filter((t) => t.team.id !== me.team.id).sort((x, y) => y.maxSingleBid - x.maxSingleBid);
-  const maxPurse = Math.max(...a.teams.map((t) => t.initialPurse), 1);
   const rank = a.leaderboard.find((r) => r.teamId === me.team.id)?.officialRank;
   return (
     <div className="space-y-3">
@@ -77,7 +76,7 @@ export default function LiveWorkspace() {
         {/* CENTER */}
         <Card>
           <div className="grid grid-cols-3 gap-2 p-3">
-            <div><div className="text-[10px] uppercase text-faint">Purse</div><div className="tabular text-lg font-semibold text-accent">{m(me.remaining)}</div><div className="text-[11px] text-muted">free {m(me.discretionary)}</div></div>
+            <div><div className="text-[10px] uppercase text-faint">Purse</div><div className="tabular text-lg font-semibold text-accent">{m(me.remaining)}</div><div className="text-[11px] text-muted">max bid {m(me.ruleMaxBid)}</div></div>
             <div><div className="text-[10px] uppercase text-faint">Avg rating</div><div className="tabular text-lg font-semibold">{fmtRating(me.rating.average)}</div><div className="text-[11px] text-muted">rank #{rank}</div></div>
             <div><div className="text-[10px] uppercase text-faint">Required</div><div className="tabular text-lg font-semibold">{me.rules.slotsRequired}</div><div className="truncate text-[11px] text-muted">{[...new Set(me.rules.mandatoryPlan)].map(cellLabel).join(", ") || "complete"}</div></div>
           </div>
@@ -90,18 +89,9 @@ export default function LiveWorkspace() {
 
         {/* RIGHT */}
         <Card>
-          <CardHeader title="Competitors" description="Sorted by bidding capacity" />
-          <CardBody className="max-h-[420px] space-y-2 overflow-y-auto">
-            {comps.map((t) => (
-              <div key={t.team.id} className="text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <TeamChip team={t.team} />
-                  <span className="tabular"><b>{m(t.remaining)}</b> · {fmtRating(t.rating.average)} · needs {t.rules.slotsRequired}</span>
-                </div>
-                <Progress className="mt-1" value={t.remaining / maxPurse} tone={!t.purseSufficient ? "danger" : t.discretionary < t.floorReserve * 0.25 ? "warn" : "accent"} />
-                <div className="mt-0.5 flex justify-between text-[10px] text-faint"><span>max bid {m(t.maxSingleBid)}</span><span>{[...new Set(t.rules.mandatoryPlan)].slice(0, 2).map(cellLabel).join(", ")}</span></div>
-              </div>
-            ))}
+          <CardHeader title="Live standings" description="Re-orders automatically as results come in" />
+          <CardBody className="max-h-[460px] overflow-y-auto">
+            <LiveStandings a={a} myTeamId={myTeamId} />
           </CardBody>
           <div className="border-t border-line/60 p-3">
             <div className="mb-2 text-xs font-semibold">Strategic alerts</div>

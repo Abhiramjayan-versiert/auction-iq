@@ -213,6 +213,17 @@ const { chromium } = require("playwright");
   check((await pp.locator("text=Auction War Room").count()) > 0, "Participant War Room loads on a phone");
   check((await pp.locator("text=Offline Hero").count()) > 0, "Participant feed shows the operator's latest entry");
   check((await pp.locator("nav[aria-label='Primary'] >> text=Competitors").count()) > 0, "Mobile bottom navigation present");
+  // Live standings re-order when a result changes the ranking
+  await pp.goto(`${BASE}/e/${live}/live`, { waitUntil: "networkidle" });
+  check((await pp.locator("text=Live standings").count()) > 0, "Live standings shown in the live workspace");
+  check((await pp.locator("text=Max bid").count()) > 0, "Every team's max bid is shown");
+  const shaBefore = await pp.locator("li", { hasText: "SHA" }).first().evaluate((el) => el.getBoundingClientRect().top);
+  await fetch("http://localhost:54399/rest/v1/rpc/record_live_entry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ p_event: live, p_name: "Standings Mover", p_rating: 15, p_team: (await (await fetch(`http://localhost:54399/rest/v1/teams?event_id=eq.${live}&short_name=eq.SHA`)).json())[0].id, p_amount: 1, p_status: "sold" }) });
+  await pp.evaluate(() => window.dispatchEvent(new Event("focus"))); // realtime stand-in: the app re-syncs on focus
+  await pp.waitForTimeout(1500);
+  const shaAfter = await pp.locator("li", { hasText: "SHA" }).first().evaluate((el) => el.getBoundingClientRect().top);
+  check(shaAfter < shaBefore, `Team moved up the live standings after a strong buy (${Math.round(shaBefore)}px → ${Math.round(shaAfter)}px)`);
+  check((await pp.locator("li", { hasText: "SHA" }).first().locator("svg.lucide-arrow-up").count()) > 0, "▲ rank-change marker shown");
   await pp.goto(`${BASE}/e/${live}/smart-bid`, { waitUntil: "networkidle" });
   await pp.fill("input[placeholder^='Rating']", "9");
   await pp.waitForTimeout(300);

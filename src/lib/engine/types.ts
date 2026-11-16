@@ -112,6 +112,8 @@ export interface RuleSet {
   allow_overspend: boolean;
   /** when false, rule maxima are warnings only (e.g. trackers recording an external auction) */
   enforce_max_constraints?: boolean;
+  /** when true the server rejects bids above each team's purse-based maximum bid */
+  enforce_max_bid?: boolean;
 }
 
 export interface RosterEntry {

@@ -113,6 +113,7 @@ export interface AuctionRulesRow {
   bid_increment: number;
   require_complete_squad: boolean;
   enforce_max_constraints: boolean;
+  enforce_max_bid?: boolean;
   allow_overspend: boolean;
   ranking_formula: "average" | "total" | "weighted";
   weights: Record<string, number>;

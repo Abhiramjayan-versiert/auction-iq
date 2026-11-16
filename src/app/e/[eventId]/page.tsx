@@ -10,6 +10,7 @@ import { InsightCard } from "@/components/domain/insight";
 import { SquadStatusBadge } from "@/components/domain/badges";
 import { TeamChip } from "@/components/domain/team";
 import { PlayerName, useMoney } from "@/components/participant/shared";
+import { LiveStandings } from "@/components/participant/LiveStandings";
 import { useMyTeam } from "@/components/participant/NeedTeam";
 import { useEventData } from "@/hooks/useEventData";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -76,7 +77,7 @@ export default function WarRoom() {
         </div>
         <CardBody className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
           <Stat label="Remaining purse" value={me.purseKnown ? m(me.remaining) : "Not set"} sub={me.purseKnown ? `of ${m(me.initialPurse)} · ${fmtPct(me.utilization)} spent` : "ask the organiser"} tone="accent" />
-          <Stat label="Safe to spend" value={me.purseKnown ? m(Math.max(0, me.discretionary)) : "—"} sub={me.rules.slotsRequired ? `keeps ${m(me.floorReserve)} for ${me.rules.slotsRequired} slot(s)` : "squad complete"} tone={tight} />
+          <Stat label="Max bid now" value={me.purseKnown ? m(me.ruleMaxBid) : "—"} sub={me.ruleSlotsAfter ? `keeps ${m(me.ruleSlotsAfter * intel.market.ruleMinPrice)} for ${me.ruleSlotsAfter} more player(s)` : "no further players required"} tone={tight} />
           <Stat label="Average rating" value={fmtRating(me.rating.average)} sub={`${me.rating.ratedCount} rated · total ${fmtRating(me.rating.total)}`} />
           <Stat label="Players" value={`${me.rating.count}/${rules.squad_min === rules.squad_max ? rules.squad_max : `${rules.squad_min}–${rules.squad_max}`}`} sub={`${me.rules.slotsRemaining} slot(s) left`} />
           <Stat className="col-span-2 md:col-span-1" label="Total spent" value={m(me.spent)} sub={me.avgPrice ? `avg ${m(me.avgPrice)}/player` : "no purchases yet"} />
@@ -109,6 +110,11 @@ export default function WarRoom() {
           {weaknesses[0] && <div className="mt-3 border-t border-line/60 pt-2 text-xs"><span className="text-faint">Your biggest weakness:</span> {weaknesses[0].title}</div>}
         </Card>
       </div>
+
+      <Card>
+        <CardHeader title="Live standings" description="Teams move as each result is entered · max bid = what each team can still spend on one player" action={<Link href={`${b}/leaderboard`} className="text-xs text-accent">Leaderboard →</Link>} />
+        <CardBody><LiveStandings a={intel} myTeamId={me.team.id} /></CardBody>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* LIVE FEED */}

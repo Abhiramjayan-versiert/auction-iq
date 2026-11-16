@@ -17,7 +17,7 @@ interface Tpl { id: string; name: string; description: string | null; config: { 
 export default function Rules() {
   const { event, rules, reload, transactions } = useEventData();
   const [canEdit, setCanEdit] = useState(false);
-  const [r, setR] = useState({ squad_min: "", squad_max: "", min_player_price: "", bid_increment: "", rating_scale_max: "", ranking_formula: "average", require_complete_squad: true, enforce_max_constraints: true, allow_overspend: false });
+  const [r, setR] = useState({ squad_min: "", squad_max: "", min_player_price: "", bid_increment: "", rating_scale_max: "", ranking_formula: "average", require_complete_squad: true, enforce_max_constraints: true, allow_overspend: false, enforce_max_bid: false });
   const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
   const [cs, setCs] = useState<C[]>([]);
   const [tpls, setTpls] = useState<Tpl[]>([]);
@@ -27,7 +27,7 @@ export default function Rules() {
     void sb.from("rule_templates").select("*").order("name").then(({ data }) => setTpls((data ?? []) as Tpl[]));
     void sb.from("auction_rules").select("*").eq("event_id", event!.id).single().then(({ data }) => {
       if (!data) return;
-      setR({ squad_min: String(data.squad_min), squad_max: String(data.squad_max), min_player_price: data.min_player_price == null ? "" : String(data.min_player_price), bid_increment: String(data.bid_increment), rating_scale_max: String(data.rating_scale_max), ranking_formula: data.ranking_formula, require_complete_squad: data.require_complete_squad, enforce_max_constraints: data.enforce_max_constraints, allow_overspend: data.allow_overspend });
+      setR({ squad_min: String(data.squad_min), squad_max: String(data.squad_max), min_player_price: data.min_player_price == null ? "" : String(data.min_player_price), bid_increment: String(data.bid_increment), rating_scale_max: String(data.rating_scale_max), ranking_formula: data.ranking_formula, require_complete_squad: data.require_complete_squad, enforce_max_constraints: data.enforce_max_constraints, allow_overspend: data.allow_overspend, enforce_max_bid: Boolean(data.enforce_max_bid) });
     });
   }, [event]);
   useEffect(() => {
@@ -72,6 +72,8 @@ export default function Rules() {
             <div className="col-span-2 space-y-2 pt-1">
               <Switch checked={r.enforce_max_constraints} onChange={(v) => setR({ ...r, enforce_max_constraints: v })} label="Block sales that break a maximum" />
               <Switch checked={r.allow_overspend} onChange={(v) => setR({ ...r, allow_overspend: v })} label="Allow purse overspend" />
+              <Switch checked={r.enforce_max_bid} onChange={(v) => setR({ ...r, enforce_max_bid: v })} label="Enforce maximum bid per player (keep min price × players still needed)" />
+              <p className="text-[11px] text-faint">Max bid = purse left − minimum price per slot × players still needed for the minimum squad. Set “Min price per slot” above to control it.</p>
             </div>
           </CardBody>
         </Card>

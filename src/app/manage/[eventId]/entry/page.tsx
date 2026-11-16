@@ -53,10 +53,13 @@ export default function LiveEntryPage() {
   const v = useMemo(() => validateDraft(draft, { scale: rules.rating_scale_max, players: playerLite }), [draft, rules.rating_scale_max, playerLite]);
   const pendingDup = draft.name.trim() && queue.pendingNames.has(draft.name.trim().replace(/\s+/g, " ").toLowerCase());
   const teamPurse = draft.team ? analysis.byId[draft.team] : null;
+  const overMax = !!(teamPurse && teamPurse.purseKnown && draft.price && Number(draft.price) > teamPurse.ruleMaxBid);
   const priceWarn =
     teamPurse && teamPurse.purseKnown && draft.price && Number(draft.price) > teamPurse.remaining
       ? `${teamPurse.team.name} only has ${m(teamPurse.remaining)} left${rules.allow_overspend ? " (overspend allowed)" : " — the server will reject this"}.`
-      : null;
+      : overMax
+        ? `${teamPurse!.team.name}'s maximum bid is ${m(teamPurse!.ruleMaxBid)} (it must keep ${m(teamPurse!.ruleSlotsAfter * analysis.market.ruleMinPrice)} for ${teamPurse!.ruleSlotsAfter} more player(s))${rules.enforce_max_bid ? " — this rule is enforced, so the sale will be rejected." : "."}`
+        : null;
 
   // autofill rating/category of an existing (unsold) player the operator is re-entering
   useEffect(() => {
@@ -65,6 +68,11 @@ export default function LiveEntryPage() {
 
   const save = () => {
     if (pendingDup) return toast.error("This player is already waiting to be saved.");
+    if (v.payload && overMax && rules.enforce_max_bid) {
+      toast.error(priceWarn ?? "Bid is above the team's maximum bid.");
+      priceRef.current?.focus();
+      return;
+    }
     if (!v.payload) {
       toast.error(v.errors[0]);
       if (!draft.name.trim()) nameRef.current?.focus();
@@ -132,7 +140,7 @@ export default function LiveEntryPage() {
   const last = active[0];
   const failed = queue.items.filter((i) => i.status === "error");
   const waiting = queue.items.filter((i) => i.status !== "error");
-  const teamOptions = useMemo(() => teams.map((t) => ({ ...t, remaining: analysis.byId[t.id]?.purseKnown ? m(analysis.byId[t.id].remaining) : "purse not set" })), [teams, analysis]); // eslint-disable-line react-hooks/exhaustive-deps
+  const teamOptions = useMemo(() => teams.map((t) => ({ ...t, remaining: analysis.byId[t.id]?.purseKnown ? `${m(analysis.byId[t.id].remaining)} · max ${m(analysis.byId[t.id].ruleMaxBid)}` : "purse not set" })), [teams, analysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setPurse = async (teamId: string, current: number | null) => {
     const v = prompt(`Initial purse for ${teamName(teamId)} (${rules.currency})`, current === null ? "" : String(current));
@@ -303,7 +311,7 @@ export default function LiveEntryPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm tabular">
-            <thead><tr className="text-left text-[11px] uppercase text-faint"><th className="py-1">Team</th><th className="text-right">Players bought</th><th className="text-right">Total spent</th><th className="text-right">Initial purse</th><th className="text-right">Remaining purse</th><th className="text-right">Avg rating</th></tr></thead>
+            <thead><tr className="text-left text-[11px] uppercase text-faint"><th className="py-1">Team</th><th className="text-right">Players bought</th><th className="text-right">Total spent</th><th className="text-right">Initial purse</th><th className="text-right">Remaining purse</th><th className="text-right" title="Most this team can bid on one player and still afford the minimum squad">Max bid</th><th className="text-right">Avg rating</th></tr></thead>
             <tbody>
               {analysis.teams.map((t) => {
                 const row = playerRows.length >= 0 ? teams.find((x) => x.id === t.team.id) : null;
@@ -316,6 +324,7 @@ export default function LiveEntryPage() {
                       <button className="hover:text-accent cursor-pointer" onClick={() => setPurse(t.team.id, row?.initial_purse ?? null)}>{t.purseKnown ? m(t.initialPurse) : <Badge tone="warn">set purse</Badge>}</button>
                     </td>
                     <td className={cn("text-right font-semibold", t.purseKnown && t.remaining < 0 && "text-danger")}>{t.purseKnown ? m(t.remaining) : "—"}</td>
+                    <td className="text-right font-semibold text-accent">{t.purseKnown ? m(t.ruleMaxBid) : "—"}</td>
                     <td className="text-right">{fmtRating(t.rating.average)}{t.rating.count > t.rating.ratedCount && <span className="ml-1 text-[10px] text-faint">({t.rating.ratedCount}/{t.rating.count} rated)</span>}</td>
                   </tr>
                 );

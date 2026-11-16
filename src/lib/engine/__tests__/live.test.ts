@@ -178,3 +178,18 @@ describe("advanced intelligence", () => {
     }
   });
 });
+
+describe("purse-rule maximum bid", () => {
+  it("matches the server formula and caps Smart Bid when enforced", () => {
+    const rules = { ...exampleRules(), constraints: [], squad_min: 5, squad_max: 6, min_player_price: 2, enforce_max_bid: true };
+    const pool = Array.from({ length: 6 }, (_, i) => mkPlayer("BAT", "indian", 7 + i * 0.3, 2));
+    const a = analyseEvent({ rules, teams: [{ ...mkTeam("T", 20) }], players: pool, transactions: [] });
+    expect(a.byId.T.ruleMaxBid).toBe(12); // 20 − 4 × 2
+    expect(a.byId.T.ruleSlotsAfter).toBe(4);
+    const r = smartBid(a, "T", pool[5], "aggressive");
+    expect(r.maxSafeBid).toBeLessThanOrEqual(12);
+    expect(r.maxBid).toBeLessThanOrEqual(12);
+    const unknown = analyseEvent({ rules, teams: [{ ...mkTeam("U"), initial_purse: null }], players: pool, transactions: [] });
+    expect(Number.isNaN(unknown.byId.U.ruleMaxBid)).toBe(true);
+  });
+});

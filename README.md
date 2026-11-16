@@ -106,6 +106,24 @@ Intelligence features:
 
 **Rehearsal data (development only).** `supabase/dev/live-auction-test.sql` creates a fictional 8-team event with different purses (one unknown) and 12 live entries with mixed missing information. It enters them through the same RPC the operator screen uses.
 
+## Live standings & maximum bid
+
+- **Live standings** (Live workspace and War Room). Every team is ordered by the official ranking, and you can switch the order to purse left or max bid. Rows slide to their new position as results arrive, and ▲/▼ shows who moved.
+- **Max bid per team** = purse left − (minimum price per player × players still needed for the minimum squad after that purchase). The minimum price is the rules' "min price per slot", or else the cheapest recorded base price.
+  - It appears on the operator's team picker and purse table, in Competitors, Live standings and the War Room.
+  - An organiser can switch on **Enforce maximum bid per player** in Auction rules; the server then rejects any sale above it (`team_max_bid()` / `_record_sale`).
+
+## Importing player lists
+
+Import accepts Excel (.xlsx, any sheet), CSV/TSV/TXT, JSON, PDF (tables are rebuilt; scanned PDFs are read with OCR), Word (.docx) and photos (OCR, beta), or a pasted list.
+
+The preview matches every column automatically: headings such as PLAYER, POSITION, INDIAN OR FOREIGN, RATING and BASE PRICE, pandas "Unnamed" columns, serial numbers and player numbers. You can change any match. Columns with no matching field are kept as extra player info.
+
+The importer also:
+- strips "NAME *" overseas markers;
+- skips duplicates;
+- offers to raise the event's rating scale when ratings exceed it.
+
 ## Trackers & crews (auctions run outside the app)
 
 Any signed-in user can create a **tracker** (`/trackers/new`) for an auction that is conducted somewhere else: in a college hall, or tracked in Excel today.
@@ -205,7 +223,7 @@ cp .env.example .env.local   # fill in your Supabase URL + anon key (+ service r
 Apply the database. Pick one:
 
 - **Supabase CLI:** `supabase link --project-ref <ref>` then `supabase db push`.
-- **SQL editor:** run the six files in `supabase/migrations/` in order.
+- **SQL editor:** run all files in `supabase/migrations/` in order (currently eight).
 
 To load the optional demo event (fictional players labelled "DEMO", invite code `DEMO2026`), also run `supabase/seed.sql`.
 
